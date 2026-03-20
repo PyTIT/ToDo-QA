@@ -3,6 +3,7 @@ from flask import Flask, render_template
 from .config import Config
 from .extensions import db, jwt
 from .auth import auth_bp
+from .tasks import tasks_bp
 
 
 def create_app():
@@ -13,6 +14,7 @@ def create_app():
     jwt.init_app(app)
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(tasks_bp)
 
     @app.get("/")
     def index():

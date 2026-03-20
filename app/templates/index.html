@@ -3,104 +3,225 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Todo QA Project — Clean Dashboard</title>
+  <title>Todo QA — Вариант A</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
 </head>
 <body>
-  <div class="page">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-logo">✓</div>
-        <div>
-          <h1>Todo QA</h1>
-          <p>Учебный pet-project</p>
-        </div>
-      </div>
+  <div class="scene"></div>
 
-      <div class="sidebar-card">
-        <h3>Фильтр статусов</h3>
-        <div class="filters">
-          <button class="filter-btn active" data-filter="all">Все</button>
-          <button class="filter-btn" data-filter="new">New</button>
-          <button class="filter-btn" data-filter="in_progress">In Progress</button>
-          <button class="filter-btn" data-filter="done">Done</button>
-        </div>
-      </div>
+  <div class="layout">
+    <section id="messageBox" class="message hidden" role="status" aria-live="polite"></section>
 
-      <div class="sidebar-card">
-        <h3>Инфо</h3>
-        <p id="authStateText">Вы не авторизованы</p>
-        <p id="userText">Пользователь: —</p>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <h2>Task Dashboard</h2>
-          <p class="muted">Простой и чистый интерфейс для задач</p>
-        </div>
-        <div class="topbar-actions">
-          <button id="showLoginBtn" class="ghost-btn">Войти</button>
-          <button id="showRegisterBtn" class="ghost-btn">Регистрация</button>
-          <button id="logoutBtn" class="danger-btn hidden">Logout</button>
-        </div>
-      </header>
-
-      <section id="messageBox" class="message hidden"></section>
-
-      <section id="authSection" class="auth-grid">
-        <div class="card">
-          <h3>Вход</h3>
-          <form id="loginForm" class="form">
-            <input type="text" id="loginUsername" placeholder="Username" required />
-            <input type="password" id="loginPassword" placeholder="Password" required />
-            <button type="submit" class="primary-btn">Войти</button>
-          </form>
-        </div>
-
-        <div class="card">
-          <h3>Регистрация</h3>
-          <form id="registerForm" class="form">
-            <input type="text" id="registerUsername" placeholder="Username" required />
-            <input type="password" id="registerPassword" placeholder="Password" required />
-            <button type="submit" class="primary-btn">Зарегистрироваться</button>
-          </form>
-        </div>
-      </section>
-
-      <section id="appSection" class="app-section hidden">
-        <div class="card">
-          <div class="section-head">
-            <h3>Новая задача</h3>
+    <section id="authSection" class="auth-screen">
+      <article class="surface hero-panel">
+        <div class="brand-lockup">
+          <div class="brand-mark">✓</div>
+          <div class="brand-copy">
+            <p class="eyebrow">QA ЦЕНТР</p>
+            <h1>Todo QA</h1>
+            <p class="subtitle">Отдельный экран для входа и отдельная рабочая зона после авторизации — без смешения форм, статистики и задач.</p>
           </div>
+        </div>
 
-          <form id="taskForm" class="task-form">
-            <input type="text" id="taskTitle" placeholder="Название задачи" required />
-            <textarea id="taskDescription" placeholder="Описание"></textarea>
+        <div class="hero-points">
+          <div class="info-chip">Flask</div>
+          <div class="info-chip">JWT</div>
+          <div class="info-chip">PostgreSQL</div>
+        </div>
 
-            <div class="row">
-              <select id="taskPriority">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-              </select>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h2>Чистый вход</h2>
+            <p>Показывается только одна форма за раз. Пользователь сразу понимает, что делать: войти или создать аккаунт.</p>
+          </article>
 
-              <button type="submit" class="primary-btn">Добавить задачу</button>
+          <article class="feature-card">
+            <h2>Хорошая читаемость</h2>
+            <p>Поля ввода контрастные и хорошо отделены от фона, поэтому форма не разваливается визуально.</p>
+          </article>
+
+          <article class="feature-card">
+            <h2>Отдельная рабочая зона</h2>
+            <p>После входа открывается полноценный workspace: задачи, статистика и фильтры видны только авторизованному пользователю.</p>
+          </article>
+        </div>
+      </article>
+
+      <article class="surface auth-card">
+        <div class="auth-card__head">
+          <p class="eyebrow">ДОСТУП</p>
+          <h2>Вход и регистрация</h2>
+          <p class="auth-card__text">Сначала авторизация, потом работа с личными задачами.</p>
+        </div>
+
+        <div class="mode-switch" role="tablist" aria-label="Выбор формы">
+          <button type="button" class="mode-switch__btn is-active" data-auth-mode="login" aria-pressed="true">Вход</button>
+          <button type="button" class="mode-switch__btn" data-auth-mode="register" aria-pressed="false">Регистрация</button>
+        </div>
+
+        <form id="loginForm" class="form-stack" data-form-mode="login">
+          <label class="field">
+            <span>Логин</span>
+            <input type="text" id="loginUsername" placeholder="Введите логин" required />
+          </label>
+
+          <label class="field">
+            <span>Пароль</span>
+            <input type="password" id="loginPassword" placeholder="Введите пароль" required />
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-block">Войти</button>
+        </form>
+
+        <form id="registerForm" class="form-stack hidden" data-form-mode="register">
+          <label class="field">
+            <span>Логин</span>
+            <input type="text" id="registerUsername" placeholder="Придумайте логин" required />
+          </label>
+
+          <label class="field">
+            <span>Пароль</span>
+            <input type="password" id="registerPassword" placeholder="Придумайте пароль" required />
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-block">Создать аккаунт</button>
+        </form>
+      </article>
+    </section>
+
+    <section id="appSection" class="workspace-screen hidden">
+      <aside class="workspace-sidebar">
+        <article class="surface sidebar-card sidebar-brand">
+          <div class="brand-lockup brand-lockup--compact">
+            <div class="brand-mark">✓</div>
+            <div class="brand-copy">
+              <p class="eyebrow">РАБОЧАЯ ЗОНА</p>
+              <h2>Todo QA</h2>
+              <p class="subtitle">Личная зона задач и проверок.</p>
             </div>
-          </form>
-        </div>
+          </div>
+        </article>
 
-        <div class="card">
-          <div class="section-head">
-            <h3>Список задач</h3>
-            <button id="reloadTasksBtn" class="ghost-btn">Обновить</button>
+        <article class="surface sidebar-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">СТАТИСТИКА</p>
+              <h3>Мои задачи</h3>
+            </div>
+            <p>Счётчики считают задачи из текущей выборки пользователя.</p>
           </div>
 
-          <div id="tasksList" class="tasks-list"></div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <span>Всего</span>
+              <strong id="totalCount">0</strong>
+            </div>
+            <div class="stat-box">
+              <span>Новые</span>
+              <strong id="newCount">0</strong>
+            </div>
+            <div class="stat-box">
+              <span>В работе</span>
+              <strong id="progressCount">0</strong>
+            </div>
+            <div class="stat-box">
+              <span>Готово</span>
+              <strong id="doneCount">0</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface sidebar-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">ФИЛЬТР</p>
+              <h3>Список задач</h3>
+            </div>
+            <p>Показывай все задачи или только нужный статус.</p>
+          </div>
+
+          <div class="filter-group">
+            <button type="button" class="filter-btn is-active" data-filter="all">Все</button>
+            <button type="button" class="filter-btn" data-filter="new">Новые</button>
+            <button type="button" class="filter-btn" data-filter="in_progress">В работе</button>
+            <button type="button" class="filter-btn" data-filter="done">Готово</button>
+          </div>
+        </article>
+
+        <article class="surface sidebar-card user-card">
+          <div class="user-row">
+            <span>Статус</span>
+            <strong id="authStatusText">Не авторизован</strong>
+          </div>
+          <div class="user-row">
+            <span>Пользователь</span>
+            <strong id="userText">—</strong>
+          </div>
+        </article>
+      </aside>
+
+      <main class="workspace-main">
+        <header class="surface topbar">
+          <div class="topbar-copy">
+            <p class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</p>
+            <h2>Панель задач</h2>
+            <p>Создавай задачи, меняй статусы и быстро проверяй текущее состояние своего списка.</p>
+          </div>
+
+          <div class="topbar-actions">
+            <button type="button" id="reloadTasksBtn" class="btn btn-secondary">Обновить</button>
+            <button type="button" id="logoutBtn" class="btn btn-danger hidden">Выйти</button>
+          </div>
+        </header>
+
+        <div class="workspace-grid">
+          <article class="surface composer-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">СОЗДАНИЕ</p>
+                <h3>Новая задача</h3>
+              </div>
+              <p>Короткая форма без лишних элементов.</p>
+            </div>
+
+            <form id="taskForm" class="form-stack">
+              <label class="field">
+                <span>Название</span>
+                <input type="text" id="taskTitle" placeholder="Например: проверить API логина" required />
+              </label>
+
+              <label class="field">
+                <span>Приоритет</span>
+                <select id="taskPriority">
+                  <option value="low">Низкий</option>
+                  <option value="medium" selected>Средний</option>
+                  <option value="high">Высокий</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Описание</span>
+                <textarea id="taskDescription" placeholder="Добавьте подробности по задаче"></textarea>
+              </label>
+
+              <button type="submit" class="btn btn-primary">Добавить задачу</button>
+            </form>
+          </article>
+
+          <article class="surface feed-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">ЛЕНТА</p>
+                <h3>Мои задачи</h3>
+              </div>
+              <p>Список обновляется после каждого действия.</p>
+            </div>
+
+            <div id="tasksList" class="tasks-list"></div>
+          </article>
         </div>
-      </section>
-    </main>
+      </main>
+    </section>
   </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

@@ -3,3 +3,5 @@ Flask-SQLAlchemy
 Flask-JWT-Extended
 psycopg[binary]
 python-dotenv
+pytest
+requests

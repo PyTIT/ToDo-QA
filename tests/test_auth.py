@@ -40,6 +40,20 @@ def test_successful_login():
     assert login_response.status_code == 200
     assert "access_token" in login_response_body
 
+def test_login_with_invalid_password():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password = f"invalid_{password}")
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 401
+    assert login_response_body["message"] == "Invalid username or password"
+
 def test_successful_registration():
     unique_suffix = uuid.uuid4().hex[:7]
     username = f"autotest_{unique_suffix}"

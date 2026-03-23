@@ -26,6 +26,21 @@ def login_user(username,password):
 
     return response, response_body
 
+def create_task(title,description,priority, headers):
+    payload = {
+        "title": title,
+        "description": description,
+        "priority": priority
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", json=payload, headers=headers)
+    response_body = response.json()
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    return response, response_body
+
+
 def test_successful_login():
     unique_suffix = uuid.uuid4().hex[:6]
     username = f"autotest_{unique_suffix}"
@@ -127,3 +142,98 @@ def test_registration_with_existing_username_returns_409():
     assert second_response.status_code == 409
     assert second_response_body["message"] == "Username already exists"
     
+
+def test_get_tasks_without_token_returns_401():
+    response = requests.get(f"{BASE_URL}/tasks")
+    response_body = response.json()
+
+    assert response.status_code == 401
+    assert "msg" in response_body
+    
+
+def test_get_tasks_with_token_returns_200():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.get(f"{BASE_URL}/tasks", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 200
+    assert isinstance(response_body, list)
+    
+def test_create_task():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "Test",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert "created_at" in response_body 
+    assert payload["title"] == response_body["title"]
+    assert payload["description"] == response_body["description"]
+    assert payload["priority"] == response_body["priority"]
+
+def test_create_task_witout_title_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "description": "description",
+        "priority": "hard"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 400

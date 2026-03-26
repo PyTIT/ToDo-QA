@@ -1,5 +1,6 @@
 import uuid
 import requests
+import pytest
 
 BASE_URL = "http://127.0.0.1:5000"
 
@@ -75,6 +76,16 @@ def test_successful_registration():
 
     assert response.status_code == 201
     assert response_body["message"] == "User created successfully"
+    
+def test_registration_with_spaces_in_login():
+    unique_suffix = uuid.uuid4().hex[:7]
+    username = f"aut  otest_{unique_suffix}"
+
+    response, response_body = register_user(username, "Password123")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Username must not contain spaces"
+
 
 def test_successful_registration_with_min_username_length():
     unique_suffix = uuid.uuid4().hex[:2]
@@ -95,32 +106,29 @@ def test_successful_registration_with_max_username_length():
     assert response.status_code == 201
     assert response_body["message"] == "User created successfully"
     
+@pytest.mark.parametrize("username", ["ab", "a" * 31])
+def test_registration_with_invalid_username_length(username):
+    response, response_body = register_user(username, "Password123")
 
-def test_successful_registration_with_min_password_length():
+    assert response.status_code == 400
+    assert response_body["message"] == "Username must be from 3 to 30 characters"
+    
+@pytest.mark.parametrize("password", ["Passwo1!", "Passwordtest12345678901234567890"])
+def test_successful_registration_with_valid_password_boundaries(password):
     unique_suffix = uuid.uuid4().hex[:6]
     username = f"autotest_{unique_suffix}"
 
-    response, response_body = register_user(username, "Passwo12")
+    response, response_body = register_user(username, password)
 
     assert response.status_code == 201
     assert response_body["message"] == "User created successfully"
 
-
-def test_successful_registration_with_max_password_length():
+@pytest.mark.parametrize("password", ["pass1!", "Passwordtest12345678901234567890!!!"])
+def test_registration_with_invalid_password_length_returns_400(password):
     unique_suffix = uuid.uuid4().hex[:6]
     username = f"autotest_{unique_suffix}"
 
-    response, response_body = register_user(username, "Passwordtest12345678901234567890")
-
-    assert response.status_code == 201
-    assert response_body["message"] == "User created successfully"
-
-
-def test_registration_with_invalid_password_returns_400():
-    unique_suffix = uuid.uuid4().hex[:6]
-    username = f"autotest_{unique_suffix}"
-
-    response, response_body = register_user(username, "1")
+    response, response_body = register_user(username, password)
 
     assert response.status_code == 400
     assert response_body["message"] == "Password must be from 8 to 32 characters"
@@ -208,7 +216,7 @@ def test_create_task():
     assert payload["description"] == response_body["description"]
     assert payload["priority"] == response_body["priority"]
 
-def test_create_task_witout_title_returns_400():
+def test_create_task_without_title_returns_400():
     unique_suffix = uuid.uuid4().hex[:6]
     username = f"autotest_{unique_suffix}"
     password = "Password123"

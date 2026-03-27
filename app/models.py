@@ -29,6 +29,7 @@ class Task(db.Model):
     description = db.Column(db.String(500), default="", nullable=False)
     status = db.Column(db.String(20), default="new", nullable=False)
     priority = db.Column(db.String(20), default="medium", nullable=False)
+    deadline = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self):
@@ -38,5 +39,6 @@ class Task(db.Model):
             "description": self.description,
             "status": self.status,
             "priority": self.priority,
+            "deadline": self.deadline.isoformat() + "Z" if self.deadline else None,
             "created_at": self.created_at.isoformat() + "Z",
         }

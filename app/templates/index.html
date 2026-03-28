@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Todo QA — Вариант A</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <title>Todo QA — Version 2</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260328-7" />
 </head>
 <body>
   <div class="scene"></div>
@@ -19,7 +19,7 @@
           <div class="brand-copy">
             <p class="eyebrow">QA ЦЕНТР</p>
             <h1>Todo QA</h1>
-            <p class="subtitle">Отдельный экран для входа и отдельная рабочая зона после авторизации — без смешения форм, статистики и задач.</p>
+            <p class="subtitle">Аккуратный интерфейс для pet-project: отдельный экран доступа, чистая рабочая зона и удобное управление задачами второй версии.</p>
           </div>
         </div>
 
@@ -27,22 +27,23 @@
           <div class="info-chip">Flask</div>
           <div class="info-chip">JWT</div>
           <div class="info-chip">PostgreSQL</div>
+          <div class="info-chip">UI v2</div>
         </div>
 
         <div class="feature-grid">
           <article class="feature-card">
-            <h2>Чистый вход</h2>
-            <p>Показывается только одна форма за раз. Пользователь сразу понимает, что делать: войти или создать аккаунт.</p>
+            <h2>Чистая авторизация</h2>
+            <p>Логин и регистрация остаются отдельными и понятными, без перегруза лишними блоками.</p>
           </article>
 
           <article class="feature-card">
-            <h2>Хорошая читаемость</h2>
-            <p>Поля ввода контрастные и хорошо отделены от фона, поэтому форма не разваливается визуально.</p>
+            <h2>Управление задачами</h2>
+            <p>Теперь в интерфейсе есть дедлайн, поиск, серверный фильтр и редактирование без прыжков по экрану.</p>
           </article>
 
           <article class="feature-card">
-            <h2>Отдельная рабочая зона</h2>
-            <p>После входа открывается полноценный workspace: задачи, статистика и фильтры видны только авторизованному пользователю.</p>
+            <h2>Удобно для тестов</h2>
+            <p>Состояния и кнопки читаемые, а сценарии предсказуемые — это потом удобно покрывать UI-автотестами.</p>
           </article>
         </div>
       </article>
@@ -51,7 +52,7 @@
         <div class="auth-card__head">
           <p class="eyebrow">ДОСТУП</p>
           <h2>Вход и регистрация</h2>
-          <p class="auth-card__text">Сначала авторизация, потом работа с личными задачами.</p>
+          <p class="auth-card__text">Сначала авторизация, потом работа только со своими задачами.</p>
         </div>
 
         <div class="mode-switch" role="tablist" aria-label="Выбор формы">
@@ -108,7 +109,7 @@
               <p class="eyebrow">СТАТИСТИКА</p>
               <h3>Мои задачи</h3>
             </div>
-            <p>Счётчики считают задачи из текущей выборки пользователя.</p>
+            <p>Счётчики показывают общую картину по всем задачам и не зависят от активного фильтра.</p>
           </div>
 
           <div class="stats-grid">
@@ -131,23 +132,6 @@
           </div>
         </article>
 
-        <article class="surface sidebar-card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">ФИЛЬТР</p>
-              <h3>Список задач</h3>
-            </div>
-            <p>Показывай все задачи или только нужный статус.</p>
-          </div>
-
-          <div class="filter-group">
-            <button type="button" class="filter-btn is-active" data-filter="all">Все</button>
-            <button type="button" class="filter-btn" data-filter="new">Новые</button>
-            <button type="button" class="filter-btn" data-filter="in_progress">В работе</button>
-            <button type="button" class="filter-btn" data-filter="done">Готово</button>
-          </div>
-        </article>
-
         <article class="surface sidebar-card user-card">
           <div class="user-row">
             <span>Статус</span>
@@ -157,6 +141,10 @@
             <span>Пользователь</span>
             <strong id="userText">—</strong>
           </div>
+          <div class="user-row">
+            <span>Фильтр</span>
+            <strong id="activeFilterText">Все задачи</strong>
+          </div>
         </article>
       </aside>
 
@@ -164,8 +152,8 @@
         <header class="surface topbar">
           <div class="topbar-copy">
             <p class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</p>
-            <h2>Панель задач</h2>
-            <p>Создавай задачи, меняй статусы и быстро проверяй текущее состояние своего списка.</p>
+            <h2>Панель задач v2</h2>
+            <p>Создавай задачи, назначай дедлайны, фильтруй результаты на сервере и редактируй карточки без перезагрузки страницы.</p>
           </div>
 
           <div class="topbar-actions">
@@ -174,14 +162,54 @@
           </div>
         </header>
 
+        <section class="surface controls-panel">
+          <div class="card-head card-head--tight">
+            <div>
+              <p class="eyebrow">ПОИСК И ФИЛЬТР</p>
+              <h3>Быстрый отбор</h3>
+            </div>
+            <p>Поиск идёт по названию и описанию, фильтр по статусу отправляется на backend.</p>
+          </div>
+
+          <div class="toolbar-grid">
+            <label class="field toolbar-field toolbar-field--search">
+              <span>Поиск</span>
+              <div class="input-with-icon">
+                <span class="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <circle cx="11" cy="11" r="6.5"></circle>
+                    <path d="M16 16l4.25 4.25"></path>
+                  </svg>
+                </span>
+                <input type="search" id="searchInput" placeholder="Например: логин, smoke, pytest" />
+              </div>
+            </label>
+
+            <label class="field toolbar-field">
+              <span>Статус</span>
+              <select id="statusFilterSelect">
+                <option value="all">Все задачи</option>
+                <option value="new">Новые</option>
+                <option value="in_progress">В работе</option>
+                <option value="done">Готово</option>
+              </select>
+            </label>
+
+            <div class="toolbar-actions">
+              <button type="button" id="applyFiltersBtn" class="btn btn-primary">Применить</button>
+              <button type="button" id="resetFiltersBtn" class="btn btn-secondary">Сбросить</button>
+            </div>
+          </div>
+        </section>
+
         <div class="workspace-grid">
           <article class="surface composer-card">
-            <div class="card-head">
+            <div class="card-head card-head--tight">
               <div>
                 <p class="eyebrow">СОЗДАНИЕ</p>
                 <h3>Новая задача</h3>
               </div>
-              <p>Короткая форма без лишних элементов.</p>
+              <p>Минимум полей, но уже со всем нужным для второй версии.</p>
             </div>
 
             <form id="taskForm" class="form-stack">
@@ -200,6 +228,37 @@
               </label>
 
               <label class="field">
+                <span>Дедлайн</span>
+                <div class="deadline-picker">
+                  <div class="date-field">
+                    <input type="text" id="taskDeadlineDate" class="deadline-picker__date deadline-picker__date-text" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" autocomplete="off" />
+                    <button type="button" class="date-picker-trigger" id="taskDeadlineDateTrigger" aria-label="Открыть календарь">
+                      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <rect x="3.5" y="4.5" width="17" height="16" rx="3"></rect>
+                        <path d="M7.5 2.75v3.5"></path>
+                        <path d="M16.5 2.75v3.5"></path>
+                        <path d="M3.5 9.5h17"></path>
+                      </svg>
+                    </button>
+                    <input type="date" id="taskDeadlineNative" class="date-picker-native" tabindex="-1" aria-hidden="true" />
+                  </div>
+                  <div class="time-stepper">
+                    <button type="button" class="time-stepper__btn" id="taskDeadlineHourPrev" aria-label="Уменьшить час">−</button>
+                    <input type="text" id="taskDeadlineHour" class="time-stepper__value" placeholder="Час" readonly aria-label="Час дедлайна" />
+                    <button type="button" class="time-stepper__btn" id="taskDeadlineHourNext" aria-label="Увеличить час">+</button>
+                  </div>
+                  <div class="time-stepper">
+                    <button type="button" class="time-stepper__btn" id="taskDeadlineMinutePrev" aria-label="Уменьшить минуты">−</button>
+                    <input type="text" id="taskDeadlineMinute" class="time-stepper__value" placeholder="Мин" readonly aria-label="Минуты дедлайна" />
+                    <button type="button" class="time-stepper__btn" id="taskDeadlineMinuteNext" aria-label="Увеличить минуты">+</button>
+                  </div>
+                </div>
+                <div class="deadline-picker__meta">
+                  <button type="button" class="field-link" id="clearTaskDeadlineBtn">Очистить</button>
+                </div>
+              </label>
+
+              <label class="field">
                 <span>Описание</span>
                 <textarea id="taskDescription" placeholder="Добавьте подробности по задаче"></textarea>
               </label>
@@ -209,14 +268,15 @@
           </article>
 
           <article class="surface feed-card">
-            <div class="card-head">
+            <div class="card-head card-head--tight">
               <div>
                 <p class="eyebrow">ЛЕНТА</p>
                 <h3>Мои задачи</h3>
               </div>
-              <p>Список обновляется после каждого действия.</p>
+              <p>Карточки можно редактировать, менять статус и удалять.</p>
             </div>
 
+            <div id="tasksSummary" class="results-summary">Пока нет загруженных задач.</div>
             <div id="tasksList" class="tasks-list"></div>
           </article>
         </div>
@@ -224,6 +284,78 @@
     </section>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <div id="editModal" class="modal hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close-modal="true"></div>
+    <div class="surface modal__dialog" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+      <div class="modal__head">
+        <div>
+          <p class="eyebrow">РЕДАКТИРОВАНИЕ</p>
+          <h3 id="editModalTitle">Изменить задачу</h3>
+        </div>
+        <button type="button" class="icon-btn" id="closeEditModalBtn" aria-label="Закрыть окно">×</button>
+      </div>
+
+      <form id="editTaskForm" class="form-stack">
+        <input type="hidden" id="editTaskId" />
+
+        <label class="field">
+          <span>Название</span>
+          <input type="text" id="editTaskTitle" required />
+        </label>
+
+        <label class="field">
+          <span>Приоритет</span>
+          <select id="editTaskPriority">
+            <option value="low">Низкий</option>
+            <option value="medium">Средний</option>
+            <option value="high">Высокий</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Дедлайн</span>
+          <div class="deadline-picker">
+            <div class="date-field">
+              <input type="text" id="editTaskDeadlineDate" class="deadline-picker__date deadline-picker__date-text" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" autocomplete="off" />
+              <button type="button" class="date-picker-trigger" id="editTaskDeadlineDateTrigger" aria-label="Открыть календарь">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <rect x="3.5" y="4.5" width="17" height="16" rx="3"></rect>
+                  <path d="M7.5 2.75v3.5"></path>
+                  <path d="M16.5 2.75v3.5"></path>
+                  <path d="M3.5 9.5h17"></path>
+                </svg>
+              </button>
+              <input type="date" id="editTaskDeadlineNative" class="date-picker-native" tabindex="-1" aria-hidden="true" />
+            </div>
+            <div class="time-stepper">
+              <button type="button" class="time-stepper__btn" id="editTaskDeadlineHourPrev" aria-label="Уменьшить час">−</button>
+              <input type="text" id="editTaskDeadlineHour" class="time-stepper__value" placeholder="Час" readonly aria-label="Час дедлайна" />
+              <button type="button" class="time-stepper__btn" id="editTaskDeadlineHourNext" aria-label="Увеличить час">+</button>
+            </div>
+            <div class="time-stepper">
+              <button type="button" class="time-stepper__btn" id="editTaskDeadlineMinutePrev" aria-label="Уменьшить минуты">−</button>
+              <input type="text" id="editTaskDeadlineMinute" class="time-stepper__value" placeholder="Мин" readonly aria-label="Минуты дедлайна" />
+              <button type="button" class="time-stepper__btn" id="editTaskDeadlineMinuteNext" aria-label="Увеличить минуты">+</button>
+            </div>
+          </div>
+          <div class="deadline-picker__meta">
+            <button type="button" class="field-link" id="clearEditDeadlineBtn">Очистить</button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Описание</span>
+          <textarea id="editTaskDescription"></textarea>
+        </label>
+
+        <div class="modal__actions">
+          <button type="button" class="btn btn-secondary" id="cancelEditBtn">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260328-7"></script>
 </body>
 </html>

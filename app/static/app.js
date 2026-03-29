@@ -10,6 +10,7 @@ const state = {
   allTasks: [],
   statusFilter: "all",
   search: "",
+  sortBy: "deadline_asc",
   authMode: "login",
   isLoading: false,
   editingTaskOriginal: null,
@@ -38,6 +39,7 @@ const elements = {
   authForms: document.querySelectorAll("[data-form-mode]"),
   searchInput: document.getElementById("searchInput"),
   statusFilterSelect: document.getElementById("statusFilterSelect"),
+  sortSelect: document.getElementById("sortSelect"),
   applyFiltersBtn: document.getElementById("applyFiltersBtn"),
   resetFiltersBtn: document.getElementById("resetFiltersBtn"),
   taskDeadlineDate: document.getElementById("taskDeadlineDate"),
@@ -215,7 +217,8 @@ function updateStats() {
 function updateFilterCaption() {
   const statusLabel = formatFilterLabel(state.statusFilter);
   const searchLabel = state.search ? ` • поиск: ${state.search}` : "";
-  safeSetText(elements.activeFilterText, `${statusLabel}${searchLabel}`);
+  const sortLabel = ` • сортировка: ${formatSortLabel(state.sortBy)}`;
+  safeSetText(elements.activeFilterText, `${statusLabel}${searchLabel}${sortLabel}`);
 }
 
 function updateSummary() {
@@ -282,6 +285,9 @@ function syncFilterControls() {
   }
   if (elements.statusFilterSelect) {
     elements.statusFilterSelect.value = state.statusFilter;
+  }
+  if (elements.sortSelect) {
+    elements.sortSelect.value = state.sortBy;
   }
 }
 
@@ -1152,16 +1158,48 @@ function buildTasksUrl() {
 }
 
 function sortTasks(tasks) {
+  const priorityOrder = { high: 3, medium: 2, low: 1 };
+
   return [...tasks].sort((first, second) => {
     const firstDeadline = first?.deadline ? new Date(first.deadline).getTime() : Number.POSITIVE_INFINITY;
     const secondDeadline = second?.deadline ? new Date(second.deadline).getTime() : Number.POSITIVE_INFINITY;
+    const firstDate = first?.created_at ? new Date(first.created_at).getTime() : 0;
+    const secondDate = second?.created_at ? new Date(second.created_at).getTime() : 0;
+    const firstPriority = priorityOrder[normalizePriority(first?.priority)] || 0;
+    const secondPriority = priorityOrder[normalizePriority(second?.priority)] || 0;
+
+    if (state.sortBy === "priority_desc") {
+      if (firstPriority !== secondPriority) {
+        return secondPriority - firstPriority;
+      }
+
+      if (firstDeadline !== secondDeadline) {
+        return firstDeadline - secondDeadline;
+      }
+
+      return secondDate - firstDate;
+    }
+
+    if (state.sortBy === "created_desc") {
+      if (firstDate !== secondDate) {
+        return secondDate - firstDate;
+      }
+
+      if (firstPriority !== secondPriority) {
+        return secondPriority - firstPriority;
+      }
+
+      return firstDeadline - secondDeadline;
+    }
 
     if (firstDeadline !== secondDeadline) {
       return firstDeadline - secondDeadline;
     }
 
-    const firstDate = first?.created_at ? new Date(first.created_at).getTime() : 0;
-    const secondDate = second?.created_at ? new Date(second.created_at).getTime() : 0;
+    if (firstPriority !== secondPriority) {
+      return secondPriority - firstPriority;
+    }
+
     return secondDate - firstDate;
   });
 }
@@ -1542,6 +1580,7 @@ async function submitTaskEdit(event) {
 function applyFilters() {
   state.search = elements.searchInput?.value.trim() || "";
   state.statusFilter = elements.statusFilterSelect?.value || "all";
+  state.sortBy = elements.sortSelect?.value || "deadline_asc";
   updateFilterCaption();
   loadTasks();
 }
@@ -1549,6 +1588,7 @@ function applyFilters() {
 function resetFilters() {
   state.search = "";
   state.statusFilter = "all";
+  state.sortBy = "deadline_asc";
   syncFilterControls();
   updateFilterCaption();
   loadTasks();
@@ -1561,6 +1601,7 @@ function logout() {
   state.allTasks = [];
   state.statusFilter = "all";
   state.search = "";
+  state.sortBy = "deadline_asc";
   state.editingTaskOriginal = null;
 
   localStorage.removeItem("token");
@@ -1614,6 +1655,12 @@ function formatFilterLabel(status) {
   if (status === "in_progress") return "В работе";
   if (status === "done") return "Готово";
   return "Все задачи";
+}
+
+function formatSortLabel(sortBy) {
+  if (sortBy === "priority_desc") return "Высокий приоритет";
+  if (sortBy === "created_desc") return "Сначала новые";
+  return "Ближайший дедлайн";
 }
 
 function formatDate(value) {

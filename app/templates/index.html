@@ -109,7 +109,6 @@
               <p class="eyebrow">СТАТИСТИКА</p>
               <h3>Мои задачи</h3>
             </div>
-            <p>Счётчики показывают общую картину по всем задачам и не зависят от активного фильтра.</p>
           </div>
 
           <div class="stats-grid">
@@ -153,7 +152,6 @@
           <div class="topbar-copy">
             <p class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</p>
             <h2>Панель задач v2</h2>
-            <p>Создавай задачи, назначай дедлайны, фильтруй результаты на сервере и редактируй карточки без перезагрузки страницы.</p>
           </div>
 
           <div class="topbar-actions">
@@ -168,7 +166,6 @@
               <p class="eyebrow">ПОИСК И ФИЛЬТР</p>
               <h3>Быстрый отбор</h3>
             </div>
-            <p>Поиск идёт по названию и описанию, фильтр по статусу отправляется на backend.</p>
           </div>
 
           <div class="toolbar-grid">
@@ -195,6 +192,15 @@
               </select>
             </label>
 
+            <label class="field toolbar-field">
+              <span>Сортировка</span>
+              <select id="sortSelect">
+                <option value="deadline_asc">Ближайший дедлайн</option>
+                <option value="priority_desc">Высокий приоритет</option>
+                <option value="created_desc">Сначала новые</option>
+              </select>
+            </label>
+
             <div class="toolbar-actions">
               <button type="button" id="applyFiltersBtn" class="btn btn-primary">Применить</button>
               <button type="button" id="resetFiltersBtn" class="btn btn-secondary">Сбросить</button>
@@ -209,7 +215,6 @@
                 <p class="eyebrow">СОЗДАНИЕ</p>
                 <h3>Новая задача</h3>
               </div>
-              <p>Минимум полей, но уже со всем нужным для второй версии.</p>
             </div>
 
             <form id="taskForm" class="form-stack">
@@ -273,7 +278,6 @@
                 <p class="eyebrow">ЛЕНТА</p>
                 <h3>Мои задачи</h3>
               </div>
-              <p>Карточки можно редактировать, менять статус и удалять.</p>
             </div>
 
             <div id="tasksSummary" class="results-summary">Пока нет загруженных задач.</div>

@@ -4,13 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Todo QA — Version 2</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260328-7" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260330-7" />
 </head>
 <body>
   <div class="scene"></div>
 
   <div class="layout">
     <section id="messageBox" class="message hidden" role="status" aria-live="polite"></section>
+
+    <div class="global-actions">
+      <button type="button" id="themeToggleBtn" class="theme-toggle" aria-pressed="false">Тёмная тема</button>
+    </div>
 
     <section id="authSection" class="auth-screen">
       <article class="surface hero-panel">
@@ -184,21 +188,25 @@
 
             <label class="field toolbar-field">
               <span>Статус</span>
-              <select id="statusFilterSelect">
-                <option value="all">Все задачи</option>
-                <option value="new">Новые</option>
-                <option value="in_progress">В работе</option>
-                <option value="done">Готово</option>
-              </select>
+              <div class="select-shell">
+                <select id="statusFilterSelect">
+                  <option value="all">Все задачи</option>
+                  <option value="new">Новые</option>
+                  <option value="in_progress">В работе</option>
+                  <option value="done">Готово</option>
+                </select>
+              </div>
             </label>
 
             <label class="field toolbar-field">
               <span>Сортировка</span>
-              <select id="sortSelect">
-                <option value="deadline_asc">Ближайший дедлайн</option>
-                <option value="priority_desc">Высокий приоритет</option>
-                <option value="created_desc">Сначала новые</option>
-              </select>
+              <div class="select-shell">
+                <select id="sortSelect">
+                  <option value="deadline_asc">Ближайший дедлайн</option>
+                  <option value="priority_desc">Высокий приоритет</option>
+                  <option value="created_desc">Сначала новые</option>
+                </select>
+              </div>
             </label>
 
             <div class="toolbar-actions">
@@ -225,11 +233,13 @@
 
               <label class="field">
                 <span>Приоритет</span>
-                <select id="taskPriority">
-                  <option value="low">Низкий</option>
-                  <option value="medium" selected>Средний</option>
-                  <option value="high">Высокий</option>
-                </select>
+                <div class="select-shell">
+                  <select id="taskPriority">
+                    <option value="low">Низкий</option>
+                    <option value="medium" selected>Средний</option>
+                    <option value="high">Высокий</option>
+                  </select>
+                </div>
               </label>
 
               <label class="field">
@@ -309,11 +319,13 @@
 
         <label class="field">
           <span>Приоритет</span>
-          <select id="editTaskPriority">
-            <option value="low">Низкий</option>
-            <option value="medium">Средний</option>
-            <option value="high">Высокий</option>
-          </select>
+          <div class="select-shell">
+            <select id="editTaskPriority">
+              <option value="low">Низкий</option>
+              <option value="medium">Средний</option>
+              <option value="high">Высокий</option>
+            </select>
+          </div>
         </label>
 
         <label class="field">
@@ -360,6 +372,29 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=20260328-7"></script>
+  <div id="deleteModal" class="modal hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close-delete-modal="true"></div>
+    <div class="surface modal__dialog modal__dialog--confirm" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+      <div class="modal__head">
+        <div>
+          <p class="eyebrow">ПОДТВЕРЖДЕНИЕ</p>
+          <h3 id="deleteModalTitle">Удалить задачу?</h3>
+        </div>
+        <button type="button" class="icon-btn" id="closeDeleteModalBtn" aria-label="Закрыть окно подтверждения">×</button>
+      </div>
+
+      <div class="confirm-copy">
+        <p>Задача будет удалена без возможности восстановления.</p>
+        <p id="deleteModalTaskText" class="confirm-copy__task">—</p>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Отмена</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260330-7"></script>
 </body>
 </html>

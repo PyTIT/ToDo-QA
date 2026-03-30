@@ -10,17 +10,22 @@ const state = {
   allTasks: [],
   statusFilter: "all",
   search: "",
-  sortBy: "deadline_asc",
+  sortBy: localStorage.getItem("sortBy") || "deadline_asc",
+  theme: localStorage.getItem("theme") || "light",
+  pendingDeleteTaskId: null,
   authMode: "login",
   isLoading: false,
   editingTaskOriginal: null,
   messageTimerId: null,
 };
 
+const customSelectRegistry = new WeakMap();
+
 const elements = {
   authSection: document.getElementById("authSection"),
   appSection: document.getElementById("appSection"),
   messageBox: document.getElementById("messageBox"),
+  themeToggleBtn: document.getElementById("themeToggleBtn"),
   userText: document.getElementById("userText"),
   authStatusText: document.getElementById("authStatusText"),
   activeFilterText: document.getElementById("activeFilterText"),
@@ -70,6 +75,11 @@ const elements = {
   editTaskDeadlineMinutePrev: document.getElementById("editTaskDeadlineMinutePrev"),
   editTaskDeadlineMinuteNext: document.getElementById("editTaskDeadlineMinuteNext"),
   clearEditDeadlineBtn: document.getElementById("clearEditDeadlineBtn"),
+  deleteModal: document.getElementById("deleteModal"),
+  closeDeleteModalBtn: document.getElementById("closeDeleteModalBtn"),
+  cancelDeleteBtn: document.getElementById("cancelDeleteBtn"),
+  confirmDeleteBtn: document.getElementById("confirmDeleteBtn"),
+  deleteModalTaskText: document.getElementById("deleteModalTaskText"),
 };
 
 elements.loginForm?.addEventListener("submit", loginUser);
@@ -84,6 +94,11 @@ elements.resetFiltersBtn?.addEventListener("click", resetFilters);
 elements.closeEditModalBtn?.addEventListener("click", closeEditModal);
 elements.cancelEditBtn?.addEventListener("click", closeEditModal);
 elements.editModal?.addEventListener("click", handleModalClick);
+elements.themeToggleBtn?.addEventListener("click", toggleTheme);
+elements.closeDeleteModalBtn?.addEventListener("click", closeDeleteModal);
+elements.cancelDeleteBtn?.addEventListener("click", closeDeleteModal);
+elements.confirmDeleteBtn?.addEventListener("click", confirmDeleteTask);
+elements.deleteModal?.addEventListener("click", handleDeleteModalClick);
 
 bindDeadlinePicker({
   dateInput: elements.taskDeadlineDate,
@@ -129,6 +144,8 @@ elements.searchInput?.addEventListener("keydown", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeEditModal();
+    closeDeleteModal();
+    closeAllCustomSelects();
   }
 });
 
@@ -139,6 +156,40 @@ elements.authModeTriggers.forEach((trigger) => {
     setAuthMode(nextMode);
   });
 });
+
+setupCustomSelects();
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.closest(".select-shell")) {
+    return;
+  }
+
+  closeAllCustomSelects();
+});
+
+function applyTheme(theme) {
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  state.theme = nextTheme;
+  document.body?.setAttribute("data-theme", nextTheme);
+  localStorage.setItem("theme", nextTheme);
+  updateThemeToggle();
+}
+
+function updateThemeToggle() {
+  if (!elements.themeToggleBtn) return;
+
+  const isDark = state.theme === "dark";
+  elements.themeToggleBtn.textContent = isDark ? "Светлая тема" : "Тёмная тема";
+  elements.themeToggleBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
+  elements.themeToggleBtn.setAttribute("aria-label", isDark ? "Переключить на светлую тему" : "Переключить на тёмную тему");
+}
+
+function toggleTheme() {
+  applyTheme(state.theme === "dark" ? "light" : "dark");
+}
 
 function showMessage(text, kind = "info") {
   if (!elements.messageBox) return;
@@ -285,12 +336,214 @@ function syncFilterControls() {
   }
   if (elements.statusFilterSelect) {
     elements.statusFilterSelect.value = state.statusFilter;
+    refreshCustomSelect(elements.statusFilterSelect);
   }
   if (elements.sortSelect) {
     elements.sortSelect.value = state.sortBy;
+    refreshCustomSelect(elements.sortSelect);
   }
 }
 
+
+function setupCustomSelects() {
+  const selects = document.querySelectorAll(".select-shell select");
+
+  selects.forEach((select, index) => {
+    if (!(select instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const shell = select.closest(".select-shell");
+    if (!(shell instanceof HTMLElement) || customSelectRegistry.has(select)) {
+      return;
+    }
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "select-shell__trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+
+    const triggerLabel = document.createElement("span");
+    triggerLabel.className = "select-shell__trigger-label";
+    trigger.appendChild(triggerLabel);
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "select-shell__dropdown hidden";
+    dropdown.setAttribute("role", "listbox");
+
+    const optionButtons = [];
+    const dropdownId = select.id ? `${select.id}CustomListbox` : `customSelectListbox${index + 1}`;
+    dropdown.id = dropdownId;
+    trigger.setAttribute("aria-controls", dropdownId);
+
+    Array.from(select.options).forEach((option) => {
+      const optionButton = document.createElement("button");
+      optionButton.type = "button";
+      optionButton.className = "select-shell__option";
+      optionButton.dataset.value = option.value;
+      optionButton.textContent = option.textContent || option.value;
+      optionButton.setAttribute("role", "option");
+      optionButton.tabIndex = -1;
+
+      optionButton.addEventListener("click", () => {
+        if (select.value === option.value) {
+          closeCustomSelect(select);
+          return;
+        }
+
+        select.value = option.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        refreshCustomSelect(select);
+        closeCustomSelect(select);
+        trigger.focus();
+      });
+
+      dropdown.appendChild(optionButton);
+      optionButtons.push(optionButton);
+    });
+
+    shell.append(trigger, dropdown);
+
+    const sync = () => {
+      const selectedOption = select.options[select.selectedIndex] || select.options[0] || null;
+      const selectedLabel = selectedOption?.textContent?.trim() || "Выберите значение";
+      triggerLabel.textContent = selectedLabel;
+      trigger.title = selectedLabel;
+
+      optionButtons.forEach((button) => {
+        const isSelected = button.dataset.value === select.value;
+        button.classList.toggle("is-selected", isSelected);
+        button.setAttribute("aria-selected", isSelected ? "true" : "false");
+      });
+    };
+
+    const open = ({ focusSelected = false } = {}) => {
+      closeAllCustomSelects(select);
+      shell.classList.add("is-open");
+      dropdown.classList.remove("hidden");
+      trigger.setAttribute("aria-expanded", "true");
+
+      if (focusSelected) {
+        const selectedButton = optionButtons.find((button) => button.dataset.value === select.value) || optionButtons[0];
+        selectedButton?.focus();
+      }
+    };
+
+    const close = () => {
+      shell.classList.remove("is-open");
+      dropdown.classList.add("hidden");
+      trigger.setAttribute("aria-expanded", "false");
+    };
+
+    const focusOptionByStep = (step) => {
+      const currentIndex = optionButtons.findIndex((button) => button.dataset.value === select.value);
+      const fallbackIndex = step > 0 ? 0 : optionButtons.length - 1;
+      const nextIndex = currentIndex >= 0
+        ? (currentIndex + step + optionButtons.length) % optionButtons.length
+        : fallbackIndex;
+      const nextButton = optionButtons[nextIndex];
+      if (!nextButton) return;
+
+      select.value = nextButton.dataset.value || select.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      refreshCustomSelect(select);
+    };
+
+    trigger.addEventListener("click", () => {
+      if (shell.classList.contains("is-open")) {
+        close();
+        return;
+      }
+
+      open();
+    });
+
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        open({ focusSelected: true });
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        open({ focusSelected: true });
+      }
+    });
+
+    dropdown.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        trigger.focus();
+        return;
+      }
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const currentIndex = optionButtons.findIndex((button) => button === document.activeElement);
+        const currentButton = currentIndex >= 0 ? optionButtons[currentIndex] : optionButtons.find((button) => button.dataset.value === select.value) || optionButtons[0];
+        const baseIndex = optionButtons.indexOf(currentButton);
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        const nextIndex = (baseIndex + step + optionButtons.length) % optionButtons.length;
+        optionButtons[nextIndex]?.focus();
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        const focusedButton = document.activeElement;
+        if (!(focusedButton instanceof HTMLButtonElement) || !focusedButton.classList.contains("select-shell__option")) {
+          return;
+        }
+
+        event.preventDefault();
+        focusedButton.click();
+      }
+    });
+
+    select.addEventListener("change", sync);
+
+    customSelectRegistry.set(select, {
+      shell,
+      trigger,
+      dropdown,
+      optionButtons,
+      sync,
+      close,
+      open,
+      focusOptionByStep,
+    });
+
+    sync();
+  });
+}
+
+function refreshCustomSelect(select) {
+  if (!(select instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  customSelectRegistry.get(select)?.sync();
+}
+
+function closeCustomSelect(select) {
+  if (!(select instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  customSelectRegistry.get(select)?.close();
+}
+
+function closeAllCustomSelects(exceptSelect = null) {
+  document.querySelectorAll(".select-shell select").forEach((select) => {
+    if (!(select instanceof HTMLSelectElement) || select === exceptSelect) {
+      return;
+    }
+
+    closeCustomSelect(select);
+  });
+}
 
 function bindDeadlinePicker({
   dateInput,
@@ -1129,17 +1382,63 @@ function setLoadingState(isLoading) {
   elements.applyFiltersBtn?.toggleAttribute("disabled", isLoading);
   elements.resetFiltersBtn?.toggleAttribute("disabled", isLoading);
 
+  if (elements.tasksSummary) {
+    elements.tasksSummary.classList.toggle("results-summary--loading", isLoading && !state.tasks.length);
+    if (isLoading && !state.tasks.length) {
+      elements.tasksSummary.textContent = "Загружаем задачи…";
+    }
+  }
+
   if (!elements.tasksList) return;
 
+  elements.tasksList.classList.toggle("tasks-list--loading", isLoading);
+
   if (isLoading && !state.tasks.length) {
-    elements.tasksList.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state__icon">⋯</div>
-        <div class="empty-state__title">Загрузка задач</div>
-        <div class="empty-state__text">Подтягиваем актуальную выборку с сервера.</div>
-      </div>
-    `;
+    elements.tasksList.innerHTML = renderTaskSkeletons(3);
   }
+}
+
+function renderTaskSkeletons(count = 3) {
+  return Array.from({ length: count }, () => `
+    <article class="task-card task-card-skeleton" aria-hidden="true">
+      <div class="task-card__header">
+        <div class="task-card__identity skeleton-stack">
+          <span class="skeleton skeleton-line skeleton-line--kicker"></span>
+          <span class="skeleton skeleton-line skeleton-line--title"></span>
+        </div>
+        <div class="task-meta skeleton-meta">
+          <span class="skeleton skeleton-pill"></span>
+          <span class="skeleton skeleton-pill"></span>
+          <span class="skeleton skeleton-pill"></span>
+        </div>
+      </div>
+      <div class="skeleton-stack task-card-skeleton__body">
+        <span class="skeleton skeleton-line skeleton-line--body"></span>
+        <span class="skeleton skeleton-line skeleton-line--body-short"></span>
+      </div>
+      <div class="task-details">
+        <div class="task-detail task-detail--skeleton">
+          <span class="skeleton skeleton-line skeleton-line--label"></span>
+          <span class="skeleton skeleton-line skeleton-line--value"></span>
+        </div>
+        <div class="task-detail task-detail--skeleton">
+          <span class="skeleton skeleton-line skeleton-line--label"></span>
+          <span class="skeleton skeleton-line skeleton-line--value"></span>
+        </div>
+      </div>
+      <div class="task-card__footer">
+        <div class="task-actions task-actions--status skeleton-actions">
+          <span class="skeleton skeleton-button"></span>
+          <span class="skeleton skeleton-button"></span>
+          <span class="skeleton skeleton-button"></span>
+        </div>
+        <div class="task-actions skeleton-actions">
+          <span class="skeleton skeleton-button skeleton-button--wide"></span>
+          <span class="skeleton skeleton-button"></span>
+        </div>
+      </div>
+    </article>
+  `).join("");
 }
 
 function buildTasksUrl() {
@@ -1328,6 +1627,7 @@ async function createTask(event) {
     const priorityField = document.getElementById("taskPriority");
     if (priorityField) {
       priorityField.value = "medium";
+      refreshCustomSelect(priorityField);
     }
 
     clearDeadlinePicker(elements.taskDeadlineDate, elements.taskDeadlineNative, elements.taskDeadlineHour, elements.taskDeadlineMinute, elements.taskDeadlineHourPrev, elements.taskDeadlineHourNext, elements.taskDeadlineMinutePrev, elements.taskDeadlineMinuteNext);
@@ -1354,12 +1654,57 @@ function handleTaskAction(event) {
   }
 
   if (action === "delete") {
-    deleteTask(taskId);
+    requestDeleteTask(taskId);
   }
 
   if (action === "edit") {
     openEditModal(taskId);
   }
+}
+
+function requestDeleteTask(taskId) {
+  const task = getTaskFromState(taskId);
+  state.pendingDeleteTaskId = taskId;
+
+  safeSetText(
+    elements.deleteModalTaskText,
+    task?.title ? `Задача: ${task.title}` : `Задача #${taskId}`
+  );
+
+  elements.deleteModal?.classList.remove("hidden");
+  elements.deleteModal?.setAttribute("aria-hidden", "false");
+  document.body.classList.add("body-lock");
+  elements.confirmDeleteBtn?.focus();
+}
+
+function closeDeleteModal() {
+  elements.deleteModal?.classList.add("hidden");
+  elements.deleteModal?.setAttribute("aria-hidden", "true");
+  safeSetText(elements.deleteModalTaskText, "—");
+  state.pendingDeleteTaskId = null;
+
+  if (elements.editModal?.classList.contains("hidden")) {
+    document.body.classList.remove("body-lock");
+  }
+}
+
+function handleDeleteModalClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.dataset.closeDeleteModal === "true") {
+    closeDeleteModal();
+  }
+}
+
+async function confirmDeleteTask() {
+  const taskId = Number(state.pendingDeleteTaskId || 0);
+  if (!taskId) {
+    closeDeleteModal();
+    return;
+  }
+
+  await deleteTask(taskId);
 }
 
 async function updateTaskStatus(taskId, status) {
@@ -1388,6 +1733,7 @@ async function updateTaskStatus(taskId, status) {
 
 async function deleteTask(taskId) {
   clearMessage();
+  elements.confirmDeleteBtn?.toggleAttribute("disabled", true);
 
   try {
     const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
@@ -1401,10 +1747,13 @@ async function deleteTask(taskId) {
       return;
     }
 
+    closeDeleteModal();
     showMessage("Задача удалена.", "success");
     removeTaskFromState(taskId);
   } catch (_error) {
     showMessage("Не удалось удалить задачу.", "error");
+  } finally {
+    elements.confirmDeleteBtn?.toggleAttribute("disabled", false);
   }
 }
 
@@ -1447,6 +1796,7 @@ async function openEditModal(taskId) {
     elements.editTaskTitle.value = state.editingTaskOriginal.title;
     elements.editTaskDescription.value = state.editingTaskOriginal.description;
     elements.editTaskPriority.value = state.editingTaskOriginal.priority;
+    refreshCustomSelect(elements.editTaskPriority);
     setDatePickerValue(elements.editTaskDeadlineDate, elements.editTaskDeadlineNative, deadlineParts.date);
     syncDeadlinePicker({
       dateInput: elements.editTaskDeadlineDate,
@@ -1488,7 +1838,10 @@ function closeEditModal() {
   elements.editTaskForm?.reset();
   clearDeadlinePicker(elements.editTaskDeadlineDate, elements.editTaskDeadlineNative, elements.editTaskDeadlineHour, elements.editTaskDeadlineMinute, elements.editTaskDeadlineHourPrev, elements.editTaskDeadlineHourNext, elements.editTaskDeadlineMinutePrev, elements.editTaskDeadlineMinuteNext);
   state.editingTaskOriginal = null;
-  document.body.classList.remove("body-lock");
+
+  if (elements.deleteModal?.classList.contains("hidden")) {
+    document.body.classList.remove("body-lock");
+  }
 }
 
 function handleModalClick(event) {
@@ -1581,6 +1934,7 @@ function applyFilters() {
   state.search = elements.searchInput?.value.trim() || "";
   state.statusFilter = elements.statusFilterSelect?.value || "all";
   state.sortBy = elements.sortSelect?.value || "deadline_asc";
+  localStorage.setItem("sortBy", state.sortBy);
   updateFilterCaption();
   loadTasks();
 }
@@ -1589,6 +1943,7 @@ function resetFilters() {
   state.search = "";
   state.statusFilter = "all";
   state.sortBy = "deadline_asc";
+  localStorage.setItem("sortBy", state.sortBy);
   syncFilterControls();
   updateFilterCaption();
   loadTasks();
@@ -1606,9 +1961,11 @@ function logout() {
 
   localStorage.removeItem("token");
   localStorage.removeItem("username");
+  localStorage.removeItem("sortBy");
 
   syncFilterControls();
   closeEditModal();
+  closeDeleteModal();
   showMessage("Сеанс завершён.", "success");
   updateView();
 }
@@ -1722,6 +2079,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+applyTheme(state.theme);
 refreshDeadlinePickers();
 syncFilterControls();
 updateView();

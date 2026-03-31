@@ -1044,11 +1044,14 @@ function bindDeadlinePicker({
     sync();
   });
 
-  nativeDateInput?.addEventListener("change", () => {
+  const handleNativeDateSelection = () => {
     dateInput.dataset.touched = "true";
-    setDatePickerValue(dateInput, nativeDateInput, nativeDateInput.value || "");
+    setDatePickerValue(dateInput, nativeDateInput, nativeDateInput?.value || "");
     sync();
-  });
+  };
+
+  nativeDateInput?.addEventListener("input", handleNativeDateSelection);
+  nativeDateInput?.addEventListener("change", handleNativeDateSelection);
 
   dateTriggerButton?.addEventListener("click", () => {
     if (!(nativeDateInput instanceof HTMLInputElement)) {
@@ -1056,10 +1059,10 @@ function bindDeadlinePicker({
     }
 
     const minDateValue = formatInputDate(getMinimumDeadlineDate());
+    const currentDateValue = getCanonicalDateValue(dateInput);
+
     nativeDateInput.min = minDateValue;
-    if (!nativeDateInput.value) {
-      nativeDateInput.value = getCanonicalDateValue(dateInput) || minDateValue;
-    }
+    nativeDateInput.value = currentDateValue || "";
 
     if (typeof nativeDateInput.showPicker === "function") {
       nativeDateInput.showPicker();
@@ -1707,6 +1710,21 @@ function validateTaskPayload(payload) {
   return null;
 }
 
+function applyAuthorizedSession(token, username, { successMessage = "Вход выполнен успешно." } = {}) {
+  state.token = token || "";
+  state.username = username || "";
+
+  localStorage.setItem("token", state.token);
+  localStorage.setItem("username", state.username);
+
+  elements.loginForm?.reset();
+  clearAuthInlineErrors("login");
+  clearAuthInlineErrors("register");
+  setAuthMode("login");
+  showMessage(successMessage, "success");
+  updateView();
+}
+
 async function registerUser(event) {
   event.preventDefault();
   clearMessage();
@@ -1736,17 +1754,33 @@ async function registerUser(event) {
       return;
     }
 
-    elements.registerForm?.reset();
-    clearAuthInlineErrors("register");
-    const loginField = elements.loginUsername;
-    if (loginField) {
-      loginField.value = username;
-      loginField.dataset.touched = "false";
+    const loginResponse = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ username, password }),
+    });
+
+    const loginData = await safeReadJson(loginResponse);
+
+    if (!loginResponse.ok || !loginData.access_token) {
+      elements.registerForm?.reset();
+      clearAuthInlineErrors("register");
+      const loginField = elements.loginUsername;
+      if (loginField) {
+        loginField.value = username;
+        loginField.dataset.touched = "false";
+      }
+
+      clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
+      setAuthMode("login");
+      showMessage("Аккаунт создан, но автологин не выполнился. Войди вручную.", "warning");
+      return;
     }
 
-    clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
-    setAuthMode("login");
-    showMessage("Аккаунт создан. Теперь войди в систему.", "success");
+    elements.registerForm?.reset();
+    applyAuthorizedSession(loginData.access_token, username, {
+      successMessage: "Аккаунт создан и вход выполнен автоматически.",
+    });
   } catch (_error) {
     showMessage("Сервис регистрации недоступен.", "error");
   } finally {
@@ -1783,16 +1817,9 @@ async function loginUser(event) {
       return;
     }
 
-    state.token = data.access_token || "";
-    state.username = username;
-
-    localStorage.setItem("token", state.token);
-    localStorage.setItem("username", state.username);
-
-    elements.loginForm?.reset();
-    clearAuthInlineErrors("login");
-    showMessage("Вход выполнен успешно.", "success");
-    updateView();
+    applyAuthorizedSession(data.access_token || "", username, {
+      successMessage: "Вход выполнен успешно.",
+    });
   } catch (_error) {
     showMessage("Сервис входа недоступен.", "error");
   } finally {

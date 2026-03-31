@@ -335,6 +335,43 @@ button:disabled {
   color: #50677f;
 }
 
+.field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-counter {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #7c91a8;
+  transition: color 0.18s ease;
+}
+
+.field-counter.is-warning {
+  color: #a26805;
+}
+
+.field-counter.is-error {
+  color: #c84a67;
+}
+
+.field-feedback {
+  display: block;
+  min-height: 1.15rem;
+  font-size: 0.83rem;
+  line-height: 1.4;
+  color: #c84a67;
+}
+
+input.is-invalid,
+textarea.is-invalid,
+.select-shell.is-invalid {
+  border-color: rgba(247, 123, 140, 0.72) !important;
+  box-shadow: 0 0 0 4px rgba(247, 123, 140, 0.12) !important;
+}
+
 .field-hint {
   font-size: 0.86rem;
   line-height: 1.45;
@@ -529,9 +566,25 @@ textarea {
 }
 
 .btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   padding: 14px 18px;
   border-radius: 16px;
   font-weight: 800;
+}
+
+.btn.is-loading::before,
+.action-btn.is-busy::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: button-spin 0.7s linear infinite;
 }
 
 .btn:hover,
@@ -796,6 +849,49 @@ textarea {
   font-size: 0.96rem;
 }
 
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(159, 181, 204, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #35506a;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+}
+
+.filter-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.filter-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.filter-chip__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1e63d6;
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
 .tasks-list {
   display: flex;
   flex-direction: column;
@@ -806,6 +902,10 @@ textarea {
   padding: 18px 20px;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.82);
+}
+
+.task-card--busy {
+  box-shadow: 0 18px 34px rgba(76, 99, 124, 0.14);
 }
 
 .task-card__header,
@@ -968,6 +1068,10 @@ textarea {
 }
 
 .action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 40px;
   padding: 0 14px;
   border-radius: 13px;
@@ -1091,6 +1195,10 @@ textarea {
 @media (max-width: 760px) {
   .layout {
     padding: 18px;
+  }
+
+  .field__head {
+    align-items: flex-start;
   }
 
   .topbar,
@@ -1511,6 +1619,12 @@ textarea {
   width: 128px;
 }
 
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);
@@ -1745,8 +1859,44 @@ body[data-theme="dark"] .results-summary,
 body[data-theme="dark"] .task-description,
 body[data-theme="dark"] .task-detail__label,
 body[data-theme="dark"] .field-hint,
-body[data-theme="dark"] .confirm-copy {
+body[data-theme="dark"] .confirm-copy,
+body[data-theme="dark"] .field-counter {
   color: var(--muted);
+}
+
+body[data-theme="dark"] .field-counter.is-warning {
+  color: #ffd987;
+}
+
+body[data-theme="dark"] .field-counter.is-error,
+body[data-theme="dark"] .field-feedback {
+  color: #ffb7c8;
+}
+
+body[data-theme="dark"] input.is-invalid,
+body[data-theme="dark"] textarea.is-invalid,
+body[data-theme="dark"] .select-shell.is-invalid {
+  border-color: rgba(247, 123, 140, 0.62) !important;
+  box-shadow: 0 0 0 4px rgba(247, 123, 140, 0.14) !important;
+}
+
+body[data-theme="dark"] .active-filters {
+  margin-bottom: 14px;
+}
+
+body[data-theme="dark"] .filter-chip {
+  border-color: rgba(126, 154, 190, 0.24);
+  background: linear-gradient(180deg, rgba(14, 24, 40, 0.98), rgba(9, 17, 29, 0.97));
+  color: #dce7f6;
+}
+
+body[data-theme="dark"] .filter-chip:hover {
+  background: linear-gradient(180deg, rgba(18, 31, 48, 0.98), rgba(11, 21, 35, 0.96));
+}
+
+body[data-theme="dark"] .filter-chip__remove {
+  background: rgba(43, 108, 245, 0.26);
+  color: #f7fbff;
 }
 
 body[data-theme="dark"] .btn-secondary {

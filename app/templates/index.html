@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Todo QA — Version 2</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260330-7" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260330-8" />
 </head>
 <body>
   <div class="scene"></div>
@@ -68,28 +68,32 @@
           <label class="field">
             <span>Логин</span>
             <input type="text" id="loginUsername" placeholder="Введите логин" required />
+            <span id="loginUsernameError" class="field-feedback hidden" aria-live="polite"></span>
           </label>
 
           <label class="field">
             <span>Пароль</span>
             <input type="password" id="loginPassword" placeholder="Введите пароль" required />
+            <span id="loginPasswordError" class="field-feedback hidden" aria-live="polite"></span>
           </label>
 
-          <button type="submit" class="btn btn-primary btn-block">Войти</button>
+          <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-block">Войти</button>
         </form>
 
         <form id="registerForm" class="form-stack hidden" data-form-mode="register">
           <label class="field">
             <span>Логин</span>
             <input type="text" id="registerUsername" placeholder="Придумайте логин" required />
+            <span id="registerUsernameError" class="field-feedback hidden" aria-live="polite"></span>
           </label>
 
           <label class="field">
             <span>Пароль</span>
             <input type="password" id="registerPassword" placeholder="Придумайте пароль" required />
+            <span id="registerPasswordError" class="field-feedback hidden" aria-live="polite"></span>
           </label>
 
-          <button type="submit" class="btn btn-primary btn-block">Создать аккаунт</button>
+          <button type="submit" id="registerSubmitBtn" class="btn btn-primary btn-block">Создать аккаунт</button>
         </form>
       </article>
     </section>
@@ -227,8 +231,12 @@
 
             <form id="taskForm" class="form-stack">
               <label class="field">
-                <span>Название</span>
+                <div class="field__head">
+                  <span>Название</span>
+                  <span id="taskTitleCounter" class="field-counter">0/80</span>
+                </div>
                 <input type="text" id="taskTitle" placeholder="Например: проверить API логина" required />
+                <span id="taskTitleError" class="field-feedback hidden" aria-live="polite"></span>
               </label>
 
               <label class="field">
@@ -271,14 +279,19 @@
                 <div class="deadline-picker__meta">
                   <button type="button" class="field-link" id="clearTaskDeadlineBtn">Очистить</button>
                 </div>
+                <span id="taskDeadlineError" class="field-feedback hidden" aria-live="polite"></span>
               </label>
 
               <label class="field">
-                <span>Описание</span>
+                <div class="field__head">
+                  <span>Описание</span>
+                  <span id="taskDescriptionCounter" class="field-counter">0/500</span>
+                </div>
                 <textarea id="taskDescription" placeholder="Добавьте подробности по задаче"></textarea>
+                <span id="taskDescriptionError" class="field-feedback hidden" aria-live="polite"></span>
               </label>
 
-              <button type="submit" class="btn btn-primary">Добавить задачу</button>
+              <button type="submit" id="taskSubmitBtn" class="btn btn-primary">Добавить задачу</button>
             </form>
           </article>
 
@@ -290,6 +303,7 @@
               </div>
             </div>
 
+            <div id="activeFilterChips" class="active-filters hidden" aria-live="polite"></div>
             <div id="tasksSummary" class="results-summary">Пока нет загруженных задач.</div>
             <div id="tasksList" class="tasks-list"></div>
           </article>
@@ -313,8 +327,12 @@
         <input type="hidden" id="editTaskId" />
 
         <label class="field">
-          <span>Название</span>
+          <div class="field__head">
+            <span>Название</span>
+            <span id="editTaskTitleCounter" class="field-counter">0/80</span>
+          </div>
           <input type="text" id="editTaskTitle" required />
+          <span id="editTaskTitleError" class="field-feedback hidden" aria-live="polite"></span>
         </label>
 
         <label class="field">
@@ -357,16 +375,21 @@
           <div class="deadline-picker__meta">
             <button type="button" class="field-link" id="clearEditDeadlineBtn">Очистить</button>
           </div>
+          <span id="editTaskDeadlineError" class="field-feedback hidden" aria-live="polite"></span>
         </label>
 
         <label class="field">
-          <span>Описание</span>
+          <div class="field__head">
+            <span>Описание</span>
+            <span id="editTaskDescriptionCounter" class="field-counter">0/500</span>
+          </div>
           <textarea id="editTaskDescription"></textarea>
+          <span id="editTaskDescriptionError" class="field-feedback hidden" aria-live="polite"></span>
         </label>
 
         <div class="modal__actions">
           <button type="button" class="btn btn-secondary" id="cancelEditBtn">Отмена</button>
-          <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+          <button type="submit" id="editTaskSubmitBtn" class="btn btn-primary">Сохранить изменения</button>
         </div>
       </form>
     </div>

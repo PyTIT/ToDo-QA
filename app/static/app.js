@@ -20,6 +20,12 @@ const state = {
 };
 
 const customSelectRegistry = new WeakMap();
+const buttonLabelRegistry = new WeakMap();
+const taskActionState = new Map();
+
+const CYRILLIC_RE = /[А-Яа-яЁё]/;
+const LATIN_RE = /[A-Za-z]/;
+const DIGIT_RE = /\d/;
 
 const elements = {
   authSection: document.getElementById("authSection"),
@@ -34,12 +40,23 @@ const elements = {
   progressCount: document.getElementById("progressCount"),
   doneCount: document.getElementById("doneCount"),
   tasksSummary: document.getElementById("tasksSummary"),
+  activeFilterChips: document.getElementById("activeFilterChips"),
   tasksList: document.getElementById("tasksList"),
   logoutBtn: document.getElementById("logoutBtn"),
   reloadTasksBtn: document.getElementById("reloadTasksBtn"),
   loginForm: document.getElementById("loginForm"),
+  loginUsername: document.getElementById("loginUsername"),
+  loginPassword: document.getElementById("loginPassword"),
+  loginSubmitBtn: document.getElementById("loginSubmitBtn"),
+  registerSubmitBtn: document.getElementById("registerSubmitBtn"),
+  taskSubmitBtn: document.getElementById("taskSubmitBtn"),
+  editTaskSubmitBtn: document.getElementById("editTaskSubmitBtn"),
   registerForm: document.getElementById("registerForm"),
+  registerUsername: document.getElementById("registerUsername"),
+  registerPassword: document.getElementById("registerPassword"),
   taskForm: document.getElementById("taskForm"),
+  taskTitle: document.getElementById("taskTitle"),
+  taskDescription: document.getElementById("taskDescription"),
   authModeTriggers: document.querySelectorAll("[data-auth-mode]"),
   authForms: document.querySelectorAll("[data-form-mode]"),
   searchInput: document.getElementById("searchInput"),
@@ -57,6 +74,15 @@ const elements = {
   taskDeadlineMinutePrev: document.getElementById("taskDeadlineMinutePrev"),
   taskDeadlineMinuteNext: document.getElementById("taskDeadlineMinuteNext"),
   clearTaskDeadlineBtn: document.getElementById("clearTaskDeadlineBtn"),
+  taskTitleError: document.getElementById("taskTitleError"),
+  taskDescriptionError: document.getElementById("taskDescriptionError"),
+  taskDeadlineError: document.getElementById("taskDeadlineError"),
+  taskTitleCounter: document.getElementById("taskTitleCounter"),
+  taskDescriptionCounter: document.getElementById("taskDescriptionCounter"),
+  loginUsernameError: document.getElementById("loginUsernameError"),
+  loginPasswordError: document.getElementById("loginPasswordError"),
+  registerUsernameError: document.getElementById("registerUsernameError"),
+  registerPasswordError: document.getElementById("registerPasswordError"),
   editModal: document.getElementById("editModal"),
   closeEditModalBtn: document.getElementById("closeEditModalBtn"),
   cancelEditBtn: document.getElementById("cancelEditBtn"),
@@ -75,6 +101,11 @@ const elements = {
   editTaskDeadlineMinutePrev: document.getElementById("editTaskDeadlineMinutePrev"),
   editTaskDeadlineMinuteNext: document.getElementById("editTaskDeadlineMinuteNext"),
   clearEditDeadlineBtn: document.getElementById("clearEditDeadlineBtn"),
+  editTaskTitleError: document.getElementById("editTaskTitleError"),
+  editTaskDescriptionError: document.getElementById("editTaskDescriptionError"),
+  editTaskDeadlineError: document.getElementById("editTaskDeadlineError"),
+  editTaskTitleCounter: document.getElementById("editTaskTitleCounter"),
+  editTaskDescriptionCounter: document.getElementById("editTaskDescriptionCounter"),
   deleteModal: document.getElementById("deleteModal"),
   closeDeleteModalBtn: document.getElementById("closeDeleteModalBtn"),
   cancelDeleteBtn: document.getElementById("cancelDeleteBtn"),
@@ -99,6 +130,7 @@ elements.closeDeleteModalBtn?.addEventListener("click", closeDeleteModal);
 elements.cancelDeleteBtn?.addEventListener("click", closeDeleteModal);
 elements.confirmDeleteBtn?.addEventListener("click", confirmDeleteTask);
 elements.deleteModal?.addEventListener("click", handleDeleteModalClick);
+elements.activeFilterChips?.addEventListener("click", handleFilterChipAction);
 
 bindDeadlinePicker({
   dateInput: elements.taskDeadlineDate,
@@ -112,6 +144,7 @@ bindDeadlinePicker({
   minuteNextButton: elements.taskDeadlineMinuteNext,
   clearButton: elements.clearTaskDeadlineBtn,
   preserveCurrentValue: false,
+  onChange: () => validateDeadlineField("create"),
 });
 bindDeadlinePicker({
   dateInput: elements.editTaskDeadlineDate,
@@ -125,6 +158,7 @@ bindDeadlinePicker({
   minuteNextButton: elements.editTaskDeadlineMinuteNext,
   clearButton: elements.clearEditDeadlineBtn,
   preserveCurrentValue: true,
+  onChange: () => validateDeadlineField("edit"),
 });
 
 window.addEventListener("focus", refreshDeadlinePickers);
@@ -158,6 +192,7 @@ elements.authModeTriggers.forEach((trigger) => {
 });
 
 setupCustomSelects();
+setupInlineFieldUX();
 
 document.addEventListener("click", (event) => {
   const target = event.target;
@@ -169,6 +204,417 @@ document.addEventListener("click", (event) => {
 
   closeAllCustomSelects();
 });
+
+function rememberButtonLabel(button) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return "";
+  }
+
+  if (!buttonLabelRegistry.has(button)) {
+    buttonLabelRegistry.set(button, button.textContent || "");
+  }
+
+  return buttonLabelRegistry.get(button) || "";
+}
+
+function setButtonBusy(button, isBusy, busyLabel = "Сохраняем...") {
+  if (!(button instanceof HTMLButtonElement)) return;
+
+  const defaultLabel = rememberButtonLabel(button);
+
+  if (isBusy) {
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.textContent = busyLabel;
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.textContent = defaultLabel;
+}
+
+function setCounter(counter, value, limit) {
+  if (!(counter instanceof HTMLElement)) return;
+
+  const currentLength = String(value || "").length;
+  counter.textContent = `${currentLength}/${limit}`;
+  counter.classList.toggle("is-warning", limit - currentLength <= 15 && currentLength <= limit);
+  counter.classList.toggle("is-error", currentLength > limit);
+}
+
+function setInlineMessage(control, feedbackNode, message = "") {
+  if (control instanceof HTMLElement) {
+    control.classList.toggle("is-invalid", Boolean(message));
+    control.setAttribute("aria-invalid", message ? "true" : "false");
+  }
+
+  if (!(feedbackNode instanceof HTMLElement)) return;
+
+  feedbackNode.textContent = message;
+  feedbackNode.classList.toggle("hidden", !message);
+}
+
+function clearInlineMessage(control, feedbackNode) {
+  setInlineMessage(control, feedbackNode, "");
+}
+
+function focusFirstInvalidControl(configs) {
+  const invalidConfig = configs.find((config) => config?.validator?.());
+  invalidConfig?.input?.focus();
+}
+
+function hasWhitespace(value) {
+  return /\s/.test(String(value || ""));
+}
+
+function getUsernameError(value) {
+  const safeValue = String(value || "");
+
+  if (!safeValue.trim()) return "Логин обязателен.";
+  if (hasWhitespace(safeValue)) return "Логин не должен содержать пробелы.";
+  if (safeValue.length < 3 || safeValue.length > 30) return "Логин должен быть от 3 до 30 символов.";
+  if (CYRILLIC_RE.test(safeValue)) return "Логин не должен содержать кириллицу.";
+  if (/^\d+$/.test(safeValue)) return "Логин не должен состоять только из цифр.";
+
+  return "";
+}
+
+function getPasswordError(value) {
+  const safeValue = String(value || "");
+
+  if (!safeValue) return "Пароль обязателен.";
+  if (hasWhitespace(safeValue)) return "Пароль не должен содержать пробелы.";
+  if (safeValue.length < 8 || safeValue.length > 32) return "Пароль должен быть от 8 до 32 символов.";
+  if (CYRILLIC_RE.test(safeValue)) return "Пароль не должен содержать кириллицу.";
+  if (!LATIN_RE.test(safeValue)) return "Пароль должен содержать хотя бы одну латинскую букву.";
+  if (!DIGIT_RE.test(safeValue)) return "Пароль должен содержать хотя бы одну цифру.";
+
+  return "";
+}
+
+function getTitleError(value) {
+  const trimmedValue = String(value || "").trim();
+
+  if (!trimmedValue) return "Название задачи обязательно.";
+  if (trimmedValue.length > 80) return "Название должно быть не длиннее 80 символов.";
+
+  return "";
+}
+
+function getDescriptionError(value) {
+  const safeValue = String(value || "");
+
+  if (safeValue.length > 500) return "Описание должно быть не длиннее 500 символов.";
+
+  return "";
+}
+
+function getDeadlineValue(mode) {
+  if (mode === "edit") {
+    return combineDeadlineParts(
+      getCanonicalDateValue(elements.editTaskDeadlineDate),
+      elements.editTaskDeadlineHour?.value || "",
+      elements.editTaskDeadlineMinute?.value || "",
+    );
+  }
+
+  return combineDeadlineParts(
+    getCanonicalDateValue(elements.taskDeadlineDate),
+    elements.taskDeadlineHour?.value || "",
+    elements.taskDeadlineMinute?.value || "",
+  );
+}
+
+function validateDeadlineField(mode = "create", { force = false } = {}) {
+  const isEdit = mode === "edit";
+  const dateInput = isEdit ? elements.editTaskDeadlineDate : elements.taskDeadlineDate;
+  const feedbackNode = isEdit ? elements.editTaskDeadlineError : elements.taskDeadlineError;
+
+  if (!(dateInput instanceof HTMLInputElement)) {
+    return "";
+  }
+
+  const isTouched = dateInput.dataset.touched === "true";
+  const deadlineValue = getDeadlineValue(mode);
+  const shouldValidate = force || isTouched || Boolean(getCanonicalDateValue(dateInput));
+  const message = shouldValidate && deadlineValue && !isAtLeastThirtyMinutesAhead(deadlineValue)
+    ? "Дедлайн должен быть минимум на 30 минут позже текущего времени."
+    : "";
+
+  setInlineMessage(dateInput, feedbackNode, message);
+  return message;
+}
+
+function clearTaskFormInlineState(mode = "create") {
+  if (mode === "edit") {
+    if (elements.editTaskTitle) elements.editTaskTitle.dataset.touched = "false";
+    if (elements.editTaskDescription) elements.editTaskDescription.dataset.touched = "false";
+    if (elements.editTaskDeadlineDate) elements.editTaskDeadlineDate.dataset.touched = "false";
+    clearInlineMessage(elements.editTaskTitle, elements.editTaskTitleError);
+    clearInlineMessage(elements.editTaskDescription, elements.editTaskDescriptionError);
+    clearInlineMessage(elements.editTaskDeadlineDate, elements.editTaskDeadlineError);
+    setCounter(elements.editTaskTitleCounter, elements.editTaskTitle?.value || "", 80);
+    setCounter(elements.editTaskDescriptionCounter, elements.editTaskDescription?.value || "", 500);
+    return;
+  }
+
+  if (elements.taskTitle) elements.taskTitle.dataset.touched = "false";
+  if (elements.taskDescription) elements.taskDescription.dataset.touched = "false";
+  if (elements.taskDeadlineDate) elements.taskDeadlineDate.dataset.touched = "false";
+  clearInlineMessage(elements.taskTitle, elements.taskTitleError);
+  clearInlineMessage(elements.taskDescription, elements.taskDescriptionError);
+  clearInlineMessage(elements.taskDeadlineDate, elements.taskDeadlineError);
+  setCounter(elements.taskTitleCounter, elements.taskTitle?.value || "", 80);
+  setCounter(elements.taskDescriptionCounter, elements.taskDescription?.value || "", 500);
+}
+
+function setupValidatedInput(input, feedbackNode, validator, { counter = null, limit = null } = {}) {
+  if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+    return;
+  }
+
+  const applyValidation = ({ force = false } = {}) => {
+    const isTouched = input.dataset.touched === "true";
+    const shouldValidate = force || isTouched || Boolean(String(input.value || ""));
+    const message = shouldValidate ? validator() : "";
+    setInlineMessage(input, feedbackNode, message);
+    return message;
+  };
+
+  if (limit && counter) {
+    setCounter(counter, input.value, limit);
+  }
+
+  input.dataset.touched = input.dataset.touched || "false";
+
+  input.addEventListener("input", () => {
+    if (limit && counter) {
+      setCounter(counter, input.value, limit);
+    }
+
+    applyValidation();
+  });
+
+  input.addEventListener("blur", () => {
+    input.dataset.touched = "true";
+    applyValidation({ force: true });
+  });
+}
+
+function setupInlineFieldUX() {
+  setupValidatedInput(elements.loginUsername, elements.loginUsernameError, () => getUsernameError(elements.loginUsername?.value || ""));
+  setupValidatedInput(elements.loginPassword, elements.loginPasswordError, () => getPasswordError(elements.loginPassword?.value || ""));
+  setupValidatedInput(elements.registerUsername, elements.registerUsernameError, () => getUsernameError(elements.registerUsername?.value || ""));
+  setupValidatedInput(elements.registerPassword, elements.registerPasswordError, () => getPasswordError(elements.registerPassword?.value || ""));
+  setupValidatedInput(elements.taskTitle, elements.taskTitleError, () => getTitleError(elements.taskTitle?.value || ""), { counter: elements.taskTitleCounter, limit: 80 });
+  setupValidatedInput(elements.taskDescription, elements.taskDescriptionError, () => getDescriptionError(elements.taskDescription?.value || ""), { counter: elements.taskDescriptionCounter, limit: 500 });
+  setupValidatedInput(elements.editTaskTitle, elements.editTaskTitleError, () => getTitleError(elements.editTaskTitle?.value || ""), { counter: elements.editTaskTitleCounter, limit: 80 });
+  setupValidatedInput(elements.editTaskDescription, elements.editTaskDescriptionError, () => getDescriptionError(elements.editTaskDescription?.value || ""), { counter: elements.editTaskDescriptionCounter, limit: 500 });
+
+  clearTaskFormInlineState("create");
+  clearTaskFormInlineState("edit");
+}
+
+function validateAuthFields(mode) {
+  const configs = mode === "register"
+    ? [
+        { input: elements.registerUsername, validator: () => setInlineMessage(elements.registerUsername, elements.registerUsernameError, getUsernameError(elements.registerUsername?.value || "")) || getUsernameError(elements.registerUsername?.value || "") },
+        { input: elements.registerPassword, validator: () => setInlineMessage(elements.registerPassword, elements.registerPasswordError, getPasswordError(elements.registerPassword?.value || "")) || getPasswordError(elements.registerPassword?.value || "") },
+      ]
+    : [
+        { input: elements.loginUsername, validator: () => setInlineMessage(elements.loginUsername, elements.loginUsernameError, getUsernameError(elements.loginUsername?.value || "")) || getUsernameError(elements.loginUsername?.value || "") },
+        { input: elements.loginPassword, validator: () => setInlineMessage(elements.loginPassword, elements.loginPasswordError, getPasswordError(elements.loginPassword?.value || "")) || getPasswordError(elements.loginPassword?.value || "") },
+      ];
+
+  let isValid = true;
+  configs.forEach(({ input, validator }) => {
+    if (input) input.dataset.touched = "true";
+    const message = validator();
+    if (message) isValid = false;
+  });
+
+  if (!isValid) {
+    focusFirstInvalidControl(configs);
+  }
+
+  return isValid;
+}
+
+function validateTaskFields(mode = "create") {
+  const isEdit = mode === "edit";
+  const titleInput = isEdit ? elements.editTaskTitle : elements.taskTitle;
+  const titleErrorNode = isEdit ? elements.editTaskTitleError : elements.taskTitleError;
+  const descriptionInput = isEdit ? elements.editTaskDescription : elements.taskDescription;
+  const descriptionErrorNode = isEdit ? elements.editTaskDescriptionError : elements.taskDescriptionError;
+
+  if (titleInput) titleInput.dataset.touched = "true";
+  if (descriptionInput) descriptionInput.dataset.touched = "true";
+  if (isEdit ? elements.editTaskDeadlineDate : elements.taskDeadlineDate) {
+    (isEdit ? elements.editTaskDeadlineDate : elements.taskDeadlineDate).dataset.touched = "true";
+  }
+
+  const titleMessage = getTitleError(titleInput?.value || "");
+  const descriptionMessage = getDescriptionError(descriptionInput?.value || "");
+  setInlineMessage(titleInput, titleErrorNode, titleMessage);
+  setInlineMessage(descriptionInput, descriptionErrorNode, descriptionMessage);
+  const deadlineMessage = validateDeadlineField(mode, { force: true });
+
+  const isValid = !titleMessage && !descriptionMessage && !deadlineMessage;
+  if (!isValid) {
+    if (titleMessage) {
+      titleInput?.focus();
+    } else if (descriptionMessage) {
+      descriptionInput?.focus();
+    }
+  }
+
+  return isValid;
+}
+
+function clearAuthInlineErrors(mode) {
+  if (mode === "register") {
+    clearInlineMessage(elements.registerUsername, elements.registerUsernameError);
+    clearInlineMessage(elements.registerPassword, elements.registerPasswordError);
+    if (elements.registerUsername) elements.registerUsername.dataset.touched = "false";
+    if (elements.registerPassword) elements.registerPassword.dataset.touched = "false";
+    return;
+  }
+
+  clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
+  clearInlineMessage(elements.loginPassword, elements.loginPasswordError);
+  if (elements.loginUsername) elements.loginUsername.dataset.touched = "false";
+  if (elements.loginPassword) elements.loginPassword.dataset.touched = "false";
+}
+
+function mapServerMessageToField(message, mode = "create") {
+  const safeMessage = String(message || "");
+
+  if (!safeMessage) return false;
+
+  if (mode === "login" || mode === "register") {
+    if (safeMessage.includes("Username")) {
+      const target = mode === "register" ? elements.registerUsername : elements.loginUsername;
+      const feedback = mode === "register" ? elements.registerUsernameError : elements.loginUsernameError;
+      setInlineMessage(target, feedback, safeMessage === "Username already exists" ? "Такой логин уже существует." : safeMessage);
+      target?.focus();
+      return true;
+    }
+
+    if (safeMessage.includes("Password")) {
+      const target = mode === "register" ? elements.registerPassword : elements.loginPassword;
+      const feedback = mode === "register" ? elements.registerPasswordError : elements.loginPasswordError;
+      setInlineMessage(target, feedback, safeMessage);
+      target?.focus();
+      return true;
+    }
+
+    if (mode === "login" && safeMessage.includes("Invalid username or password")) {
+      setInlineMessage(elements.loginPassword, elements.loginPasswordError, "Неверный логин или пароль.");
+      elements.loginPassword?.focus();
+      return true;
+    }
+
+    return false;
+  }
+
+  if (safeMessage.includes("Title")) {
+    const target = mode === "edit" ? elements.editTaskTitle : elements.taskTitle;
+    const feedback = mode === "edit" ? elements.editTaskTitleError : elements.taskTitleError;
+    setInlineMessage(target, feedback, safeMessage === "Title is required" ? "Название задачи обязательно." : safeMessage);
+    target?.focus();
+    return true;
+  }
+
+  if (safeMessage.includes("Description")) {
+    const target = mode === "edit" ? elements.editTaskDescription : elements.taskDescription;
+    const feedback = mode === "edit" ? elements.editTaskDescriptionError : elements.taskDescriptionError;
+    setInlineMessage(target, feedback, safeMessage);
+    target?.focus();
+    return true;
+  }
+
+  if (safeMessage.includes("Deadline")) {
+    const target = mode === "edit" ? elements.editTaskDeadlineDate : elements.taskDeadlineDate;
+    const feedback = mode === "edit" ? elements.editTaskDeadlineError : elements.taskDeadlineError;
+    setInlineMessage(target, feedback, safeMessage === "Deadline must be at least 30 minutes later than current time" ? "Дедлайн должен быть минимум на 30 минут позже текущего времени." : safeMessage);
+    target?.focus();
+    return true;
+  }
+
+  return false;
+}
+
+function getTaskAction(taskId) {
+  return taskActionState.get(Number(taskId)) || null;
+}
+
+function setTaskAction(taskId, action = null) {
+  const safeTaskId = Number(taskId);
+  if (!safeTaskId) return;
+
+  if (action) {
+    taskActionState.set(safeTaskId, action);
+  } else {
+    taskActionState.delete(safeTaskId);
+  }
+
+  renderTasks();
+}
+
+function renderActiveFilterChips() {
+  if (!elements.activeFilterChips) return;
+
+  const chips = [];
+
+  if (state.statusFilter !== "all") {
+    chips.push({ label: `Статус: ${formatFilterLabel(state.statusFilter)}`, key: "status" });
+  }
+
+  if (state.search) {
+    chips.push({ label: `Поиск: ${state.search}`, key: "search" });
+  }
+
+  if (state.sortBy !== "deadline_asc") {
+    chips.push({ label: `Сортировка: ${formatSortLabel(state.sortBy)}`, key: "sort" });
+  }
+
+  if (!chips.length) {
+    elements.activeFilterChips.innerHTML = "";
+    elements.activeFilterChips.classList.add("hidden");
+    return;
+  }
+
+  elements.activeFilterChips.innerHTML = chips.map((chip) => `
+    <button type="button" class="filter-chip" data-clear-filter="${chip.key}">
+      <span class="filter-chip__label">${escapeHtml(chip.label)}</span>
+      <span class="filter-chip__remove" aria-hidden="true">×</span>
+    </button>
+  `).join("");
+  elements.activeFilterChips.classList.remove("hidden");
+}
+
+function handleFilterChipAction(event) {
+  const button = event.target instanceof HTMLElement ? event.target.closest("[data-clear-filter]") : null;
+  if (!(button instanceof HTMLButtonElement)) return;
+
+  const filterKey = button.dataset.clearFilter;
+  if (filterKey === "status") {
+    state.statusFilter = "all";
+  }
+  if (filterKey === "search") {
+    state.search = "";
+  }
+  if (filterKey === "sort") {
+    state.sortBy = "deadline_asc";
+  }
+
+  localStorage.setItem("sortBy", state.sortBy);
+  syncFilterControls();
+  updateFilterCaption();
+  renderActiveFilterChips();
+  loadTasks();
+}
 
 function applyTheme(theme) {
   const nextTheme = theme === "dark" ? "dark" : "light";
@@ -270,6 +716,7 @@ function updateFilterCaption() {
   const searchLabel = state.search ? ` • поиск: ${state.search}` : "";
   const sortLabel = ` • сортировка: ${formatSortLabel(state.sortBy)}`;
   safeSetText(elements.activeFilterText, `${statusLabel}${searchLabel}${sortLabel}`);
+  renderActiveFilterChips();
 }
 
 function updateSummary() {
@@ -306,6 +753,7 @@ function updateView() {
     loadTasks();
   } else {
     applyTasksStateChanges([]);
+    renderActiveFilterChips();
   }
 
   updateAuthMode();
@@ -557,6 +1005,7 @@ function bindDeadlinePicker({
   minuteNextButton,
   clearButton,
   preserveCurrentValue = false,
+  onChange,
 }) {
   if (!(dateInput instanceof HTMLInputElement) || !(hourInput instanceof HTMLInputElement) || !(minuteInput instanceof HTMLInputElement)) {
     return;
@@ -574,6 +1023,7 @@ function bindDeadlinePicker({
       minuteNextButton,
       preserveCurrentValue,
     });
+    onChange?.();
   };
 
   dateInput.addEventListener("input", () => {
@@ -589,11 +1039,13 @@ function bindDeadlinePicker({
   });
 
   dateInput.addEventListener("blur", () => {
+    dateInput.dataset.touched = "true";
     normalizeDateTextValue(dateInput, nativeDateInput, preserveCurrentValue);
     sync();
   });
 
   nativeDateInput?.addEventListener("change", () => {
+    dateInput.dataset.touched = "true";
     setDatePickerValue(dateInput, nativeDateInput, nativeDateInput.value || "");
     sync();
   });
@@ -619,6 +1071,7 @@ function bindDeadlinePicker({
   });
 
   hourPrevButton?.addEventListener("click", () => {
+    dateInput.dataset.touched = "true";
     shiftDeadlineTime({
       dateInput,
       nativeDateInput,
@@ -634,6 +1087,7 @@ function bindDeadlinePicker({
   });
 
   hourNextButton?.addEventListener("click", () => {
+    dateInput.dataset.touched = "true";
     shiftDeadlineTime({
       dateInput,
       nativeDateInput,
@@ -649,6 +1103,7 @@ function bindDeadlinePicker({
   });
 
   minutePrevButton?.addEventListener("click", () => {
+    dateInput.dataset.touched = "true";
     shiftDeadlineTime({
       dateInput,
       nativeDateInput,
@@ -664,6 +1119,7 @@ function bindDeadlinePicker({
   });
 
   minuteNextButton?.addEventListener("click", () => {
+    dateInput.dataset.touched = "true";
     shiftDeadlineTime({
       dateInput,
       nativeDateInput,
@@ -679,7 +1135,9 @@ function bindDeadlinePicker({
   });
 
   clearButton?.addEventListener("click", () => {
+    dateInput.dataset.touched = "false";
     clearDeadlinePicker(dateInput, nativeDateInput, hourInput, minuteInput, hourPrevButton, hourNextButton, minutePrevButton, minuteNextButton);
+    onChange?.();
   });
 
   sync();
@@ -1253,8 +1711,14 @@ async function registerUser(event) {
   event.preventDefault();
   clearMessage();
 
-  const username = document.getElementById("registerUsername")?.value.trim() || "";
-  const password = document.getElementById("registerPassword")?.value.trim() || "";
+  if (!validateAuthFields("register")) {
+    return;
+  }
+
+  const username = elements.registerUsername?.value.trim() || "";
+  const password = elements.registerPassword?.value.trim() || "";
+
+  setButtonBusy(elements.registerSubmitBtn, true, "Создаём аккаунт...");
 
   try {
     const response = await fetch(`${API_BASE}/register`, {
@@ -1266,20 +1730,27 @@ async function registerUser(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
-      showMessage(data.error || data.message || "Не удалось зарегистрироваться.", "error");
+      if (!mapServerMessageToField(data.error || data.message, "register")) {
+        showMessage(data.error || data.message || "Не удалось зарегистрироваться.", "error");
+      }
       return;
     }
 
     elements.registerForm?.reset();
-    const loginField = document.getElementById("loginUsername");
+    clearAuthInlineErrors("register");
+    const loginField = elements.loginUsername;
     if (loginField) {
       loginField.value = username;
+      loginField.dataset.touched = "false";
     }
 
+    clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
     setAuthMode("login");
     showMessage("Аккаунт создан. Теперь войди в систему.", "success");
   } catch (_error) {
     showMessage("Сервис регистрации недоступен.", "error");
+  } finally {
+    setButtonBusy(elements.registerSubmitBtn, false);
   }
 }
 
@@ -1287,8 +1758,14 @@ async function loginUser(event) {
   event.preventDefault();
   clearMessage();
 
-  const username = document.getElementById("loginUsername")?.value.trim() || "";
-  const password = document.getElementById("loginPassword")?.value.trim() || "";
+  if (!validateAuthFields("login")) {
+    return;
+  }
+
+  const username = elements.loginUsername?.value.trim() || "";
+  const password = elements.loginPassword?.value.trim() || "";
+
+  setButtonBusy(elements.loginSubmitBtn, true, "Входим...");
 
   try {
     const response = await fetch(`${API_BASE}/login`, {
@@ -1300,7 +1777,9 @@ async function loginUser(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
-      showMessage(data.error || data.message || "Не удалось войти.", "error");
+      if (!mapServerMessageToField(data.error || data.message, "login")) {
+        showMessage(data.error || data.message || "Не удалось войти.", "error");
+      }
       return;
     }
 
@@ -1311,10 +1790,13 @@ async function loginUser(event) {
     localStorage.setItem("username", state.username);
 
     elements.loginForm?.reset();
+    clearAuthInlineErrors("login");
     showMessage("Вход выполнен успешно.", "success");
     updateView();
   } catch (_error) {
     showMessage("Сервис входа недоступен.", "error");
+  } finally {
+    setButtonBusy(elements.loginSubmitBtn, false);
   }
 }
 
@@ -1378,7 +1860,7 @@ async function loadTasks(options = {}) {
 }
 
 function setLoadingState(isLoading) {
-  elements.reloadTasksBtn?.toggleAttribute("disabled", isLoading);
+  setButtonBusy(elements.reloadTasksBtn, isLoading, "Обновляем...");
   elements.applyFiltersBtn?.toggleAttribute("disabled", isLoading);
   elements.resetFiltersBtn?.toggleAttribute("disabled", isLoading);
 
@@ -1521,9 +2003,13 @@ function renderTasks() {
     const status = normalizeStatus(task.status);
     const priority = normalizePriority(task.priority);
     const deadlineState = getDeadlineState(task.deadline);
+    const actionState = getTaskAction(task.id);
+    const isCardBusy = Boolean(actionState);
+    const editLabel = actionState?.type === "edit" ? "Открываем..." : "Редактировать";
+    const deleteLabel = actionState?.type === "delete" ? "Удаляем..." : "Удалить";
 
     return `
-      <article class="task-card" data-task-id="${task.id}">
+      <article class="task-card ${isCardBusy ? "task-card--busy" : ""}" data-task-id="${task.id}">
         <div class="task-card__header">
           <div class="task-card__identity">
             <div class="task-card__kicker">Задача #${task.id ?? "—"}</div>
@@ -1555,11 +2041,11 @@ function renderTasks() {
           </div>
 
           <div class="task-actions">
-            <button type="button" class="action-btn action-btn-edit" data-action="edit" data-id="${task.id}">
-              Редактировать
+            <button type="button" class="action-btn action-btn-edit ${actionState?.type === "edit" ? "is-busy" : ""}" data-action="edit" data-id="${task.id}" ${isCardBusy ? "disabled" : ""}>
+              ${editLabel}
             </button>
-            <button type="button" class="action-btn action-btn-danger" data-action="delete" data-id="${task.id}">
-              Удалить
+            <button type="button" class="action-btn action-btn-danger ${actionState?.type === "delete" ? "is-busy" : ""}" data-action="delete" data-id="${task.id}" ${isCardBusy ? "disabled" : ""}>
+              ${deleteLabel}
             </button>
           </div>
         </div>
@@ -1582,32 +2068,40 @@ function renderStatusButtons(taskId, currentStatus) {
     { value: "in_progress", label: "В работе" },
     { value: "done", label: "Готово" },
   ];
+  const actionState = getTaskAction(taskId);
+  const isBusy = Boolean(actionState);
 
-  return variants.map((item) => `
-    <button
-      type="button"
-      class="action-btn ${item.value === currentStatus ? "is-current" : ""}"
-      data-action="status"
-      data-id="${taskId}"
-      data-status="${item.value}"
-      ${item.value === currentStatus ? 'aria-current="true"' : ""}
-    >
-      ${item.label}
-    </button>
-  `).join("");
+  return variants.map((item) => {
+    const isCurrent = item.value === currentStatus;
+    const isPendingTarget = actionState?.type === "status" && actionState.status === item.value;
+    const label = isPendingTarget ? "Сохраняем..." : item.label;
+
+    return `
+      <button
+        type="button"
+        class="action-btn ${isCurrent ? "is-current" : ""} ${isPendingTarget ? "is-busy" : ""}"
+        data-action="status"
+        data-id="${taskId}"
+        data-status="${item.value}"
+        ${isCurrent ? 'aria-current="true"' : ""}
+        ${isBusy ? "disabled" : ""}
+      >
+        ${label}
+      </button>
+    `;
+  }).join("");
 }
 
 async function createTask(event) {
   event.preventDefault();
   clearMessage();
 
-  const payload = getTaskFormPayload();
-  const validationError = validateTaskPayload(payload);
-
-  if (validationError) {
-    showMessage(validationError, "error");
+  if (!validateTaskFields("create")) {
     return;
   }
+
+  const payload = getTaskFormPayload();
+  setButtonBusy(elements.taskSubmitBtn, true, "Добавляем...");
 
   try {
     const response = await fetch(`${API_BASE}/tasks`, {
@@ -1619,7 +2113,9 @@ async function createTask(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
-      showMessage(data.error || data.message || "Не удалось создать задачу.", "error");
+      if (!mapServerMessageToField(data.error || data.message, "create")) {
+        showMessage(data.error || data.message || "Не удалось создать задачу.", "error");
+      }
       return;
     }
 
@@ -1631,11 +2127,14 @@ async function createTask(event) {
     }
 
     clearDeadlinePicker(elements.taskDeadlineDate, elements.taskDeadlineNative, elements.taskDeadlineHour, elements.taskDeadlineMinute, elements.taskDeadlineHourPrev, elements.taskDeadlineHourNext, elements.taskDeadlineMinutePrev, elements.taskDeadlineMinuteNext);
+    clearTaskFormInlineState("create");
 
     showMessage("Задача добавлена.", "success");
     mergeTaskIntoState(data);
   } catch (_error) {
     showMessage("Не удалось создать задачу.", "error");
+  } finally {
+    setButtonBusy(elements.taskSubmitBtn, false);
   }
 }
 
@@ -1709,6 +2208,7 @@ async function confirmDeleteTask() {
 
 async function updateTaskStatus(taskId, status) {
   clearMessage();
+  setTaskAction(taskId, { type: "status", status });
 
   try {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/status`, {
@@ -1728,12 +2228,15 @@ async function updateTaskStatus(taskId, status) {
     mergeTaskIntoState(data);
   } catch (_error) {
     showMessage("Не удалось изменить статус.", "error");
+  } finally {
+    setTaskAction(taskId, null);
   }
 }
 
 async function deleteTask(taskId) {
   clearMessage();
-  elements.confirmDeleteBtn?.toggleAttribute("disabled", true);
+  setTaskAction(taskId, { type: "delete" });
+  setButtonBusy(elements.confirmDeleteBtn, true, "Удаляем...");
 
   try {
     const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
@@ -1753,12 +2256,14 @@ async function deleteTask(taskId) {
   } catch (_error) {
     showMessage("Не удалось удалить задачу.", "error");
   } finally {
-    elements.confirmDeleteBtn?.toggleAttribute("disabled", false);
+    setButtonBusy(elements.confirmDeleteBtn, false);
+    setTaskAction(taskId, null);
   }
 }
 
 async function openEditModal(taskId) {
   clearMessage();
+  setTaskAction(taskId, { type: "edit" });
 
   try {
     let data = getTaskFromState(taskId);
@@ -1795,6 +2300,7 @@ async function openEditModal(taskId) {
     elements.editTaskId.value = String(data.id || "");
     elements.editTaskTitle.value = state.editingTaskOriginal.title;
     elements.editTaskDescription.value = state.editingTaskOriginal.description;
+    clearTaskFormInlineState("edit");
     elements.editTaskPriority.value = state.editingTaskOriginal.priority;
     refreshCustomSelect(elements.editTaskPriority);
     setDatePickerValue(elements.editTaskDeadlineDate, elements.editTaskDeadlineNative, deadlineParts.date);
@@ -1829,6 +2335,8 @@ async function openEditModal(taskId) {
     elements.editTaskTitle.focus();
   } catch (_error) {
     showMessage("Не удалось открыть редактирование задачи.", "error");
+  } finally {
+    setTaskAction(taskId, null);
   }
 }
 
@@ -1837,6 +2345,7 @@ function closeEditModal() {
   elements.editModal?.setAttribute("aria-hidden", "true");
   elements.editTaskForm?.reset();
   clearDeadlinePicker(elements.editTaskDeadlineDate, elements.editTaskDeadlineNative, elements.editTaskDeadlineHour, elements.editTaskDeadlineMinute, elements.editTaskDeadlineHourPrev, elements.editTaskDeadlineHourNext, elements.editTaskDeadlineMinutePrev, elements.editTaskDeadlineMinuteNext);
+  clearTaskFormInlineState("edit");
   state.editingTaskOriginal = null;
 
   if (elements.deleteModal?.classList.contains("hidden")) {
@@ -1860,6 +2369,10 @@ async function submitTaskEdit(event) {
   const taskId = Number(elements.editTaskId?.value || 0);
   if (!taskId) {
     showMessage("Не удалось определить задачу для редактирования.", "error");
+    return;
+  }
+
+  if (!validateTaskFields("edit")) {
     return;
   }
 
@@ -1896,17 +2409,13 @@ async function submitTaskEdit(event) {
     payload.deadline = currentValues.deadline;
   }
 
-  const validationError = validateTaskPatchPayload(payload);
-  if (validationError) {
-    showMessage(validationError, "error");
-    return;
-  }
-
   if (!Object.keys(payload).length) {
     closeEditModal();
     showMessage("Изменений нет.", "warning");
     return;
   }
+
+  setButtonBusy(elements.editTaskSubmitBtn, true, "Сохраняем...");
 
   try {
     const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
@@ -1918,7 +2427,9 @@ async function submitTaskEdit(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
-      showMessage(data.error || data.message || "Не удалось сохранить изменения.", "error");
+      if (!mapServerMessageToField(data.error || data.message, "edit")) {
+        showMessage(data.error || data.message || "Не удалось сохранить изменения.", "error");
+      }
       return;
     }
 
@@ -1927,6 +2438,8 @@ async function submitTaskEdit(event) {
     mergeTaskIntoState(data);
   } catch (_error) {
     showMessage("Не удалось сохранить изменения.", "error");
+  } finally {
+    setButtonBusy(elements.editTaskSubmitBtn, false);
   }
 }
 
@@ -1958,6 +2471,7 @@ function logout() {
   state.search = "";
   state.sortBy = "deadline_asc";
   state.editingTaskOriginal = null;
+  taskActionState.clear();
 
   localStorage.removeItem("token");
   localStorage.removeItem("username");
@@ -1966,6 +2480,8 @@ function logout() {
   syncFilterControls();
   closeEditModal();
   closeDeleteModal();
+  clearTaskFormInlineState("create");
+  clearTaskFormInlineState("edit");
   showMessage("Сеанс завершён.", "success");
   updateView();
 }

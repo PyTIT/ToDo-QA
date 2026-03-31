@@ -77,7 +77,7 @@ def test_successful_registration():
     assert response.status_code == 201
     assert response_body["message"] == "User created successfully"
     
-def test_registration_with_spaces_in_login():
+def test_registration_with_spaces_in_login_returns_400():
     unique_suffix = uuid.uuid4().hex[:7]
     username = f"aut  otest_{unique_suffix}"
 
@@ -85,7 +85,31 @@ def test_registration_with_spaces_in_login():
 
     assert response.status_code == 400
     assert response_body["message"] == "Username must not contain spaces"
+    
+def test_registration_with_spaces_in_password_returns_400():
+    unique_suffix = uuid.uuid4().hex[:7]
+    username = f"autotest_{unique_suffix}"
 
+    response, response_body = register_user(username, "Passw  ord123")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Password must not contain spaces"
+    
+def test_registration_without_login_returns_400():
+
+    response, response_body = register_user("", "Password123!")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Username is required"
+
+def test_registration_without_password_returns_400():
+    unique_suffix = uuid.uuid4().hex[:7]
+    username = f"autotest_{unique_suffix}"
+    
+    response, response_body = register_user(username, "")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Password is required"
 
 def test_successful_registration_with_min_username_length():
     unique_suffix = uuid.uuid4().hex[:2]
@@ -122,6 +146,24 @@ def test_successful_registration_with_valid_password_boundaries(password):
 
     assert response.status_code == 201
     assert response_body["message"] == "User created successfully"
+
+def test_registration_without_letters_in_password_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+
+    response, response_body = register_user(username, "12345678")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Password must contain at least one Latin letter"
+    
+def test_registration_without_numbers_in_password_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+
+    response, response_body = register_user(username, "abcdefgh")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Password must contain at least one digit"
 
 @pytest.mark.parametrize("password", ["pass1!", "Passwordtest12345678901234567890!!!"])
 def test_registration_with_invalid_password_length_returns_400(password):

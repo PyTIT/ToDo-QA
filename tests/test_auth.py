@@ -855,3 +855,97 @@ def test_delete_other_user_task_returns_403():
 
     assert response_delete.status_code == 403
     assert response_delete_body == {"message": "Forbidden"}
+    
+def test_delete_task_without_authorization_header_returns_401():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    token = login_response_body["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "description",
+        "priority": "high"
+    }
+
+    create_response = requests.post(f"{BASE_URL}/tasks",headers=headers, json=payload)
+    create_response_body = create_response.json()
+    task_id = create_response_body["id"]
+
+    delete_response = requests.delete(f"{BASE_URL}/tasks/{task_id}")
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+    
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert delete_response.status_code == 401
+    assert delete_response.json() == {"msg": "Missing Authorization Header"}
+    
+def test_delete_task_with_invalid_authorization_header_returns_422():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    token = login_response_body["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "description",
+        "priority": "high"
+    }
+
+    create_response = requests.post(f"{BASE_URL}/tasks",headers=headers, json=payload)
+    create_response_body = create_response.json()
+    task_id = create_response_body["id"]
+
+    delete_response = requests.delete(f"{BASE_URL}/tasks/{task_id}", headers={"Authorization": f"Bearer f{token}"})
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+    
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert delete_response.status_code == 422
+    
+def test_delete_task_with_invalid_format_authorization_header_returns_401():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    token = login_response_body["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "description",
+        "priority": "high"
+    }
+
+    create_response = requests.post(f"{BASE_URL}/tasks",headers=headers, json=payload)
+    create_response_body = create_response.json()
+    task_id = create_response_body["id"]
+
+    delete_response = requests.delete(f"{BASE_URL}/tasks/{task_id}", headers={"Authorization": token})
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+    
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert delete_response.status_code == 401

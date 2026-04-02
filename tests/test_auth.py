@@ -207,6 +207,19 @@ def test_login_with_spaces_before_password_returns_400():
 
     assert login_response.status_code == 400
     assert login_response_body["message"] == "Password must not contain spaces"
+
+def test_login_without_password_returns_400():
+    unique_suffix = uuid.uuid4().hex[:7]
+    username = f"autotest_{unique_suffix}"
+    
+    register_response, register_response_body = register_user(username, "Qwety123!")
+    login_response, login_response_body = login_user(username, "")
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 400
+    assert login_response_body["message"] == "Password is required"
     
 def test_successful_login_with_non_existent_field():
     unique_suffix = uuid.uuid4().hex[:6]
@@ -283,6 +296,36 @@ def test_registration_with_spaces_in_password_returns_400():
 def test_registration_without_login_returns_400():
 
     response, response_body = register_user("", "Password123!")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Username is required"
+    
+def test_registration_login_only_with_digits_returns_400():
+
+    response, response_body = register_user("123", "Password123!")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Username must not contain only digits"
+    
+def test_registration_login_with_сyrillic_returns_400():
+
+    response, response_body = register_user("123csкирил", "Password123!")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Username must not contain Cyrillic characters"
+    
+def test_registration_password_with_сyrillic_returns_400():
+    unique_suffix = uuid.uuid4().hex[:7]
+    username = f"autotest_{unique_suffix}"
+
+    response, response_body = register_user(username, "Пароль123К!")
+
+    assert response.status_code == 400
+    assert response_body["message"] == "Password must not contain Cyrillic characters"
+    
+def test_registration_login_only_with_spaces_returns_400():
+
+    response, response_body = register_user("   ", "Password123!")
 
     assert response.status_code == 400
     assert response_body["message"] == "Username is required"

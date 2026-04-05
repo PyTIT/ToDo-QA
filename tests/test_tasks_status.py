@@ -84,6 +84,96 @@ def test_change_task_status():
     assert response_patch.status_code == 200
     assert response_patch_body["status"] == "in_progress"
     assert response_patch_body["id"] == task_id
+    
+def test_change_task_status_without_authorization_header_returns_401():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "test_task",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    new_status = {"status": "in_progress"}
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+    task_id = response_body["id"] 
+    
+    response_patch = requests.patch(f"{BASE_URL}/tasks/{task_id}/status", json=new_status)
+    response_patch_body = response_patch.json()
+    
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert response_body["title"] == "test_task"
+    assert response_body["status"] == "new"
+    
+    assert response_patch.status_code == 401
+    assert response_patch_body == {"msg": "Missing Authorization Header"}
+    
+def test_change_task_status_to_same_value_returns_200():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "test_task",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    new_status = {"status": "in_progress"}
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+    task_id = response_body["id"] 
+    
+    response_patch = requests.patch(f"{BASE_URL}/tasks/{task_id}/status", headers=headers, json=new_status)
+    response_patch_body = response_patch.json()
+    
+    response_patch_1 = requests.patch(f"{BASE_URL}/tasks/{task_id}/status", headers=headers, json=new_status)
+    response_patch_body_1 = response_patch.json()
+    
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert response_body["title"] == "test_task"
+    assert response_body["status"] == "new"
+    
+    assert response_patch.status_code == 200
+    assert response_patch_body["status"] == "in_progress"
+    assert response_patch_body["id"] == task_id
+
+    assert response_patch_1.status_code == 200
+    assert response_patch_body_1["status"] == "in_progress"
+    assert response_patch_body_1["id"] == task_id
 
 def test_change_task_invalid_status_return_400():
     unique_suffix = uuid.uuid4().hex[:6]
@@ -125,6 +215,45 @@ def test_change_task_invalid_status_return_400():
     
     assert response_patch.status_code == 400
     assert response_patch_body == {"message": "Invalid status"}
+    
+def test_change_task_status_without_status_field_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "test_task",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+    task_id = response_body["id"] 
+    
+    response_patch = requests.patch(f"{BASE_URL}/tasks/{task_id}/status", headers=headers, json=payload)
+    response_patch_body = response_patch.json()
+    
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert response_body["title"] == "test_task"
+    assert response_body["status"] == "new"
+    
+    assert response_patch.status_code == 400
+    assert response_patch_body == {"message": "Status is required"}
 
 def test_change_other_user_task_returns_403():
     unique_suffix_1 = uuid.uuid4().hex[:6]

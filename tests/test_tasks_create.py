@@ -29,11 +29,12 @@ def login_user(username, password):
     return response, response_body
 
 
-def create_task(title, description, priority, headers):
+def create_task(title, description, priority, headers,deadline):
     payload = {
         "title": title,
         "description": description,
-        "priority": priority
+        "priority": priority,
+        "deadline": deadline
     }
 
     response = requests.post(f"{BASE_URL}/tasks", json=payload, headers=headers)
@@ -54,7 +55,8 @@ def test_create_task():
     payload = {
         "title": "Тестовый заголовок",
         "description": "description",
-        "priority": "high"
+        "priority": "high",
+        "deadline": "2026-12-12T18:30:00Z"
     }
 
     token = login_response_body["access_token"]
@@ -133,3 +135,311 @@ def test_create_task_title_only_spaces_returns_400():
     assert "access_token" in login_response_body
     
     assert response.status_code == 400
+
+def test_create_task_title_empty_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 400
+    
+def test_create_task_with_title_is_longer_than_allowed_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 400
+    assert response_body == {"message": "Title must be from 1 to 80 characters"}
+    
+def test_create_task_with_title_is_max_lenght():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "abcdefghijklmnopqrstuvwxyzabdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert "created_at" in response_body 
+    assert payload["title"] == response_body["title"]
+    assert payload["description"] == response_body["description"]
+    assert payload["priority"] == response_body["priority"]
+    
+def test_create_task_with_title_max_length_minus_one_returns_201():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "abcdefghijklmnopqrstuvwxyzabdefgijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc",
+        "description": "description",
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    
+def test_create_task_with_empty_description():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "",
+        "priority": "high",
+        "deadline": "2026-12-12T18:30:00Z"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201  
+    
+def test_create_task_with_description_longer_than_max_length_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    payload = {
+        "title": "test_task",
+        "description": "a" * 501,
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 400
+    assert response_body == {"message": "Description must be up to 500 characters"}
+
+
+def test_create_task_with_max_description_length_returns_201():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    payload = {
+        "title": "test_task",
+        "description": "a" * 500,
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 201
+
+
+def test_create_task_with_description_one_character_shorter_than_max_length_returns_201():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    payload = {
+        "title": "test_task",
+        "description": "a" * 499,
+        "priority": "high"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 201
+    
+def test_create_task_with_invalid_priority_returns_400():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "description",
+        "priority": "invalid",
+        "deadline": "2026-12-12T18:30:00Z"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 400
+    assert response_body == {"message": "Priority must be low, medium or high"}
+    
+def test_create_task_without_priority_sets_medium_by_default():
+    unique_suffix = uuid.uuid4().hex[:8]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+    
+    payload = {
+        "title": "Тестовый заголовок",
+        "description": "description",\
+        "priority": None,
+        "deadline": "2026-12-12T18:30:00Z"
+    }
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+    
+    assert response.status_code == 201
+    assert response_body["priority"] == "medium"

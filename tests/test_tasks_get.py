@@ -43,14 +43,91 @@ def create_task(title, description, priority, headers):
 
 # GET /tasks
 
-def test_get_tasks_without_token_returns_401():
-    response = requests.get(f"{BASE_URL}/tasks")
+from datetime import timedelta
+from app import create_app
+from flask_jwt_extended import create_access_token
+
+
+def test_get_tasks_with_valid_token_returns_all_own_tasks():
+    unique_suffix_1 = uuid.uuid4().hex[:6]
+    username_1 = f"autotest_{unique_suffix_1}"
+    password_1 = "Password123"
+
+    register_response_1, register_response_body_1 = register_user(username_1, password_1)
+    login_response_1, login_response_body_1 = login_user(username_1, password_1)
+
+    token_1 = login_response_body_1["access_token"]
+    headers_1 = {
+        "Authorization": f"Bearer {token_1}"
+    }
+
+    create_response_1, create_response_body_1 = create_task(
+        "task_user_1_first",
+        "description_1",
+        "high",
+        headers_1
+    )
+    create_response_2, create_response_body_2 = create_task(
+        "task_user_1_second",
+        "description_2",
+        "medium",
+        headers_1
+    )
+
+    unique_suffix_2 = uuid.uuid4().hex[:6]
+    username_2 = f"autotest_{unique_suffix_2}"
+    password_2 = "Password123"
+
+    register_response_2, register_response_body_2 = register_user(username_2, password_2)
+    login_response_2, login_response_body_2 = login_user(username_2, password_2)
+
+    token_2 = login_response_body_2["access_token"]
+    headers_2 = {
+        "Authorization": f"Bearer {token_2}"
+    }
+
+    create_response_3, create_response_body_3 = create_task(
+        "task_user_2",
+        "description_3",
+        "low",
+        headers_2
+    )
+
+    response = requests.get(f"{BASE_URL}/tasks", headers=headers_1)
     response_body = response.json()
 
-    assert response.status_code == 401
-    assert "msg" in response_body
+    assert register_response_1.status_code == 201
+    assert register_response_body_1["message"] == "User created successfully"
 
-def test_get_tasks_with_token_returns_200():
+    assert login_response_1.status_code == 200
+    assert "access_token" in login_response_body_1
+
+    assert create_response_1.status_code == 201
+    assert create_response_body_1["title"] == "task_user_1_first"
+
+    assert create_response_2.status_code == 201
+    assert create_response_body_2["title"] == "task_user_1_second"
+
+    assert register_response_2.status_code == 201
+    assert register_response_body_2["message"] == "User created successfully"
+
+    assert login_response_2.status_code == 200
+    assert "access_token" in login_response_body_2
+
+    assert create_response_3.status_code == 201
+    assert create_response_body_3["title"] == "task_user_2"
+
+    assert response.status_code == 200
+    assert isinstance(response_body, list)
+
+    titles = [task["title"] for task in response_body]
+
+    assert "task_user_1_first" in titles
+    assert "task_user_1_second" in titles
+    assert "task_user_2" not in titles
+
+
+def test_get_tasks_without_tasks_returns_empty_list():
     unique_suffix = uuid.uuid4().hex[:6]
     username = f"autotest_{unique_suffix}"
     password = "Password123"
@@ -62,7 +139,7 @@ def test_get_tasks_with_token_returns_200():
     headers = {
         "Authorization": f"Bearer {token}"
     }
-    
+
     response = requests.get(f"{BASE_URL}/tasks", headers=headers)
     response_body = response.json()
 
@@ -71,114 +148,315 @@ def test_get_tasks_with_token_returns_200():
 
     assert login_response.status_code == 200
     assert "access_token" in login_response_body
-    
-    assert response.status_code == 200
-    assert isinstance(response_body, list)
 
-def test_get_only_my_tasks():
-    # ---------- 1. Создаём первого пользователя ----------
-    # Делаем уникальный суффикс, чтобы username не повторялся между запусками тестов
+    assert response.status_code == 200
+    assert response_body == []
+
+
+def test_get_tasks_with_expired_token_returns_401():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    app = create_app()
+    with app.app_context():
+        expired_token = create_access_token(
+            identity="1",
+            expires_delta=timedelta(seconds=-1)
+        )
+
+    headers = {
+        "Authorization": f"Bearer {expired_token}"
+    }
+
+    response = requests.get(f"{BASE_URL}/tasks", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 401
+    assert "msg" in response_body
+
+
+def test_get_tasks_with_invalid_token_returns_422():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer f{token}"
+    }
+
+    response = requests.get(f"{BASE_URL}/tasks", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 422
+    assert "msg" in response_body
+
+
+def test_get_tasks_without_token_returns_401():
+    response = requests.get(f"{BASE_URL}/tasks")
+    response_body = response.json()
+
+    assert response.status_code == 401
+    assert response_body == {"msg": "Missing Authorization Header"}
+
+
+def test_get_tasks_with_invalid_authorization_header_format_returns_401():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+
+    response = requests.get(
+        f"{BASE_URL}/tasks",
+        headers={"Authorization": token}
+    )
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 401
+    assert "msg" in response_body
+
+
+def test_get_own_task_by_id_returns_200():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    create_response, create_response_body = create_task(
+        "task_for_get_by_id",
+        "description",
+        "high",
+        headers
+    )
+    task_id = create_response_body["id"]
+
+    response = requests.get(f"{BASE_URL}/tasks/{task_id}", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert create_response.status_code == 201
+    assert create_response_body["title"] == "task_for_get_by_id"
+
+    assert response.status_code == 200
+    assert response_body["id"] == task_id
+    assert response_body["title"] == "task_for_get_by_id"
+    assert response_body["description"] == "description"
+    assert response_body["priority"] == "high"
+
+
+def test_get_other_user_task_by_id_returns_403():
     unique_suffix_1 = uuid.uuid4().hex[:6]
     username_1 = f"autotest_{unique_suffix_1}"
     password_1 = "Password123"
 
-    # Регистрируем первого пользователя
     register_response_1, register_response_body_1 = register_user(username_1, password_1)
-
-    # Логинимся под первым пользователем
     login_response_1, login_response_body_1 = login_user(username_1, password_1)
 
-    # Достаём access token первого пользователя
     token_1 = login_response_body_1["access_token"]
-
-    # Готовим headers для авторизованных запросов от имени первого пользователя
     headers_1 = {
         "Authorization": f"Bearer {token_1}"
     }
 
-    # ---------- 2. Создаём задачу первого пользователя ----------
-    payload_1 = {
-        "title": "task_user_1",
-        "description": "description_1",
-        "priority": "high"
-    }
+    create_response, create_response_body = create_task(
+        "task_user_1",
+        "description",
+        "high",
+        headers_1
+    )
+    task_id = create_response_body["id"]
 
-    # Отправляем POST /tasks с токеном первого пользователя
-    create_response_1 = requests.post(f"{BASE_URL}/tasks",headers=headers_1,json=payload_1)
-    create_response_body_1 = create_response_1.json()
-
-    # ---------- 3. Создаём второго пользователя ----------
-    # Он нужен именно для проверки,
-    # что чужие задачи НЕ попадут в ответ первому пользователю
     unique_suffix_2 = uuid.uuid4().hex[:6]
     username_2 = f"autotest_{unique_suffix_2}"
     password_2 = "Password123"
 
-    # Регистрируем второго пользователя
     register_response_2, register_response_body_2 = register_user(username_2, password_2)
-
-    # Логинимся под вторым пользователем
     login_response_2, login_response_body_2 = login_user(username_2, password_2)
 
-    # Достаём токен второго пользователя
     token_2 = login_response_body_2["access_token"]
-
-    # Готовим headers уже для второго пользователя
     headers_2 = {
         "Authorization": f"Bearer {token_2}"
     }
 
-    # ---------- 4. Создаём задачу второго пользователя ----------
-    payload_2 = {
-        "title": "task_user_2",
-        "description": "description_2",
-        "priority": "low"
-    }
-
-    # Отправляем POST /tasks с токеном второго пользователя
-    create_response_2 = requests.post(f"{BASE_URL}/tasks",headers=headers_2,json=payload_2)
-    create_response_body_2 = create_response_2.json()
-
-    # ---------- 5. Запрашиваем список задач ПЕРВОГО пользователя ----------
-    # Важно: запрос идёт с headers_1,
-    # значит сервер должен вернуть только задачи user_1
-    response = requests.get(f"{BASE_URL}/tasks",headers=headers_1)
+    response = requests.get(f"{BASE_URL}/tasks/{task_id}", headers=headers_2)
     response_body = response.json()
 
-    # ---------- 6. Базовые проверки по первому пользователю ----------
     assert register_response_1.status_code == 201
     assert register_response_body_1["message"] == "User created successfully"
 
     assert login_response_1.status_code == 200
     assert "access_token" in login_response_body_1
 
-    assert create_response_1.status_code == 201
-    assert create_response_body_1["title"] == "task_user_1"
+    assert create_response.status_code == 201
+    assert create_response_body["title"] == "task_user_1"
 
-    # ---------- 7. Базовые проверки по второму пользователю ----------
     assert register_response_2.status_code == 201
     assert register_response_body_2["message"] == "User created successfully"
 
     assert login_response_2.status_code == 200
     assert "access_token" in login_response_body_2
 
-    assert create_response_2.status_code == 201
-    assert create_response_body_2["title"] == "task_user_2"
+    assert response.status_code == 403
+    assert response_body == {"message": "Forbidden"}
 
-    # ---------- 8. Проверяем сам GET /tasks ----------
-    # Сервер должен вернуть список задач
+
+def test_get_non_existent_task_by_id_returns_404():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.get(f"{BASE_URL}/tasks/999999999", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 404
+    assert response_body == {"message": "Task not found"}
+
+
+def test_get_own_tasks_by_valid_status_returns_200():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    create_response_1, create_response_body_1 = create_task(
+        "task_new_status",
+        "description_1",
+        "high",
+        headers
+    )
+    create_response_2, create_response_body_2 = create_task(
+        "task_done_status",
+        "description_2",
+        "medium",
+        headers
+    )
+
+    task_id = create_response_body_2["id"]
+
+    patch_response = requests.patch(
+        f"{BASE_URL}/tasks/{task_id}/status",
+        headers=headers,
+        json={"status": "done"}
+    )
+    patch_response_body = patch_response.json()
+
+    response = requests.get(f"{BASE_URL}/tasks?status=done", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert create_response_1.status_code == 201
+    assert create_response_body_1["title"] == "task_new_status"
+
+    assert create_response_2.status_code == 201
+    assert create_response_body_2["title"] == "task_done_status"
+
+    assert patch_response.status_code == 200
+    assert patch_response_body["status"] == "done"
+
     assert response.status_code == 200
     assert isinstance(response_body, list)
+    assert len(response_body) == 1
+    assert response_body[0]["id"] == task_id
+    assert response_body[0]["title"] == "task_done_status"
+    assert response_body[0]["status"] == "done"
 
-    # Достаём только titles из всех задач в ответе
-    # Например:
-    # [{"title": "task_user_1"}, {"title": "task_user_3"}]
-    # превратится в:
-    # ["task_user_1", "task_user_3"]
-    titles = [task["title"] for task in response_body]
+def test_get_own_tasks_by_invalid_status_returns_400():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
 
-    # Проверяем, что задача первого пользователя есть в ответе
-    assert "task_user_1" in titles
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
 
-    # Проверяем, что задача второго пользователя НЕ попала в ответ
-    assert "task_user_2" not in titles
+    token = login_response_body["access_token"]
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    create_response, create_response_body = create_task(
+        "task_new_status",
+        "description_1",
+        "high",
+        headers
+    )
+
+    response = requests.get(f"{BASE_URL}/tasks?status=invalidone", headers=headers)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert create_response.status_code == 201
+    assert create_response_body["title"] == "task_new_status"
+
+    assert response.status_code == 400
+    assert response_body == {"message": "Invalid status"}

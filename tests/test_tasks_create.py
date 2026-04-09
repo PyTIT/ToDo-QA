@@ -2,6 +2,8 @@ import uuid
 import requests
 import pytest
 from datetime import datetime, timedelta, timezone
+from app import create_app
+from flask_jwt_extended import create_access_token
 
 
 BASE_URL = "http://127.0.0.1:5000"
@@ -742,3 +744,39 @@ def test_create_task_with_extra_fields_ignores_them():
     assert "user_id" not in response_body
     assert "extra_field" not in response_body
     
+def test_create_task_with_expired_token_returns_401():
+    unique_suffix = uuid.uuid4().hex[:6]
+    username = f"autotest_{unique_suffix}"
+    password = "Password123"
+
+    register_response, register_response_body = register_user(username, password)
+    login_response, login_response_body = login_user(username, password)
+
+    app = create_app()
+    with app.app_context():
+        expired_token = create_access_token(
+            identity="1",
+            expires_delta=timedelta(seconds=-1)
+        )
+
+    payload = {
+        "title": "test_task",
+        "description": "description",
+        "priority": "high"
+    }
+
+    headers = {
+        "Authorization": f"Bearer {expired_token}"
+    }
+
+    response = requests.post(f"{BASE_URL}/tasks", headers=headers, json=payload)
+    response_body = response.json()
+
+    assert register_response.status_code == 201
+    assert register_response_body["message"] == "User created successfully"
+
+    assert login_response.status_code == 200
+    assert "access_token" in login_response_body
+
+    assert response.status_code == 401
+    assert "msg" in response_body

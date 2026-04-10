@@ -17,6 +17,7 @@ const state = {
   isLoading: false,
   editingTaskOriginal: null,
   messageTimerId: null,
+  loginCredentialsErrorActive: false
 };
 
 const customSelectRegistry = new WeakMap();
@@ -205,6 +206,25 @@ document.addEventListener("click", (event) => {
   closeAllCustomSelects();
 });
 
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.closest(".select-shell")) {
+    return;
+  }
+
+  if (
+    state.loginCredentialsErrorActive &&
+    elements.loginForm &&
+    !elements.loginForm.contains(target)
+  ) {
+    clearLoginCredentialsError();
+  }
+
+  closeAllCustomSelects();
+});
+
 function rememberButtonLabel(button) {
   if (!(button instanceof HTMLButtonElement)) {
     return "";
@@ -260,6 +280,32 @@ function setInlineMessage(control, feedbackNode, message = "") {
 
   feedbackNode.textContent = message;
   feedbackNode.classList.toggle("hidden", !message);
+}
+
+function setLoginCredentialsError(message = "Неверный логин или пароль.") {
+  state.loginCredentialsErrorActive = true;
+
+  setControlInvalid(elements.loginUsername, true);
+  setControlInvalid(elements.loginPassword, true);
+
+  if (elements.loginUsernameError) {
+    elements.loginUsernameError.textContent = "";
+    elements.loginUsernameError.classList.add("hidden");
+  }
+
+  setInlineMessage(elements.loginPassword, elements.loginPasswordError, message);
+}
+
+function clearLoginCredentialsError() {
+  if (!state.loginCredentialsErrorActive) return;
+
+  state.loginCredentialsErrorActive = false;
+
+  clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
+  clearInlineMessage(elements.loginPassword, elements.loginPasswordError);
+
+  if (elements.loginUsername) elements.loginUsername.dataset.touched = "false";
+  if (elements.loginPassword) elements.loginPassword.dataset.touched = "false";
 }
 
 function clearInlineMessage(control, feedbackNode) {
@@ -519,17 +565,11 @@ function mapServerMessageToField(message, mode = "create") {
     if (mode === "login" && safeMessage.includes("Invalid username or password")) {
       const authErrorText = "Неверный логин или пароль.";
 
-      setControlInvalid(elements.loginUsername, true);
-      setControlInvalid(elements.loginPassword, true);
-
-      if (elements.loginUsernameError) {
-        elements.loginUsernameError.textContent = "";
-        elements.loginUsernameError.classList.add("hidden");
+      if (mode === "login" && safeMessage.includes("Invalid username or password")) {
+        setLoginCredentialsError("Неверный логин или пароль.");
+        elements.loginPassword?.focus();
+        return true;
       }
-
-      setInlineMessage(elements.loginPassword, elements.loginPasswordError, authErrorText);
-      elements.loginPassword?.focus();
-      return true;
     }
 
     return false;
@@ -1066,6 +1106,9 @@ function bindDeadlinePicker({
     setDatePickerValue(dateInput, nativeDateInput, nativeDateInput?.value || "");
     sync();
   };
+
+  elements.loginUsername?.addEventListener("input", clearLoginCredentialsError);
+  elements.loginPassword?.addEventListener("input", clearLoginCredentialsError);
 
   nativeDateInput?.addEventListener("input", handleNativeDateSelection);
   nativeDateInput?.addEventListener("change", handleNativeDateSelection);
@@ -1740,6 +1783,11 @@ function applyAuthorizedSession(token, username, { successMessage = "Вход в
   setAuthMode("login");
   showMessage(successMessage, "success");
   updateView();
+  clearInlineMessage(elements.loginUsername, elements.loginUsernameError);
+  clearInlineMessage(elements.loginPassword, elements.loginPasswordError);
+  if (elements.loginUsername) elements.loginUsername.dataset.touched = "false";
+  if (elements.loginPassword) elements.loginPassword.dataset.touched = "false";
+  state.loginCredentialsErrorActive = false;
 }
 
 async function registerUser(event) {

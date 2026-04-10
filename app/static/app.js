@@ -243,6 +243,13 @@ function setCounter(counter, value, limit) {
   counter.classList.toggle("is-error", currentLength > limit);
 }
 
+function setControlInvalid(control, isInvalid = true) {
+  if (!(control instanceof HTMLElement)) return;
+
+  control.classList.toggle("is-invalid", isInvalid);
+  control.setAttribute("aria-invalid", isInvalid ? "true" : "false");
+}
+
 function setInlineMessage(control, feedbackNode, message = "") {
   if (control instanceof HTMLElement) {
     control.classList.toggle("is-invalid", Boolean(message));
@@ -510,7 +517,17 @@ function mapServerMessageToField(message, mode = "create") {
     }
 
     if (mode === "login" && safeMessage.includes("Invalid username or password")) {
-      setInlineMessage(elements.loginPassword, elements.loginPasswordError, "Неверный логин или пароль.");
+      const authErrorText = "Неверный логин или пароль.";
+
+      setControlInvalid(elements.loginUsername, true);
+      setControlInvalid(elements.loginPassword, true);
+
+      if (elements.loginUsernameError) {
+        elements.loginUsernameError.textContent = "";
+        elements.loginUsernameError.classList.add("hidden");
+      }
+
+      setInlineMessage(elements.loginPassword, elements.loginPasswordError, authErrorText);
       elements.loginPassword?.focus();
       return true;
     }

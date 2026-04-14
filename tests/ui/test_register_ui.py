@@ -299,3 +299,186 @@ def test_registration_with_username_is_too_short(page: Page):
     # На рабочий экран не переходим
     expect(page.locator("#authSection")).to_be_visible()
     expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_with_password_is_too_short(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("Pasw23")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль должен быть от 8 до 32 символов.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_with_password_is_too_long(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("Pasw23qwqwqw12121sqwtwrtweweqqq1233455")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль должен быть от 8 до 32 символов.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_password_with_spaces(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("Pasw23or d1 123")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль не должен содержать пробелы.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_password_with_only_digit(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("123412345678")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль должен содержать хотя бы одну латинскую букву.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_password_with_only_letеers(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("lettersletters")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль должен содержать хотя бы одну цифру.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_registration_password_with_cyrillic_letters(page: Page):
+    username, _ = generate_unique_user()
+    open_register_form(page)
+
+    # Заполняем валидный логин и короткий пароль
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill("lettersкириллица")
+
+    # Уводим фокус с логина, чтобы сработала inline-валидация
+    page.locator("#registerUsername").click()
+    page.locator("#registerPassword").click()
+
+    expect(page.locator("#registerPasswordError")).to_be_visible()
+    expect(page.locator("#registerPasswordError")).to_have_text("Пароль не должен содержать кириллицу.")
+    expect(page.locator("#registerPassword")).to_have_class("is-invalid")
+
+    # У логина ошибки быть не должно
+    expect(page.locator("#registerUsernameError")).to_be_hidden()
+
+    # На рабочий экран не переходим
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_switch_from_register_form_to_login_form(page: Page):
+    open_register_form(page)
+
+    # Убеждаемся, что сейчас открыта регистрация
+    expect(page.locator("#registerForm")).to_be_visible()
+    expect(page.locator("#loginForm")).to_be_hidden()
+
+    # Переключаемся на окно авторизации
+    page.locator('[data-auth-mode="login"]').click()
+
+    expect(page.locator("#loginForm")).to_be_visible()
+    expect(page.locator("#registerForm")).to_be_hidden()
+
+    # Остаёмся на auth screen
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    
+def test_theme_toggle_from_light_to_dark_and_back_preserves_register_fields(page: Page):
+    open_register_form(page)
+
+    username, _ = generate_unique_user()
+    password = "Password123"
+
+    # Заполняем поля регистрации
+    page.locator("#registerUsername").fill(username)
+    page.locator("#registerPassword").fill(password)
+
+    # Переключаем тему на тёмную
+    page.locator("#themeToggleBtn").click()
+
+    expect(page.locator("body")).to_have_attribute("data-theme", "dark")
+    expect(page.locator("#registerUsername")).to_have_value(username)
+    expect(page.locator("#registerPassword")).to_have_value(password)
+
+    # Переключаем тему обратно на светлую
+    page.locator("#themeToggleBtn").click()
+
+    expect(page.locator("body")).to_have_attribute("data-theme", "light")
+    expect(page.locator("#registerUsername")).to_have_value(username)
+    expect(page.locator("#registerPassword")).to_have_value(password)
+
+    # Всё ещё остаёмся на экране авторизации
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()

@@ -1952,7 +1952,12 @@ async function loadTasks(options = {}) {
 }
 
 function setLoadingState(isLoading) {
-  setButtonBusy(elements.reloadTasksBtn, isLoading, "Обновляем...");
+  if (elements.reloadTasksBtn instanceof HTMLButtonElement) {
+    elements.reloadTasksBtn.disabled = isLoading;
+    elements.reloadTasksBtn.classList.remove("is-loading");
+    elements.reloadTasksBtn.textContent = "Обновить";
+  }
+
   elements.applyFiltersBtn?.toggleAttribute("disabled", isLoading);
   elements.resetFiltersBtn?.toggleAttribute("disabled", isLoading);
 
@@ -2160,25 +2165,20 @@ function renderStatusButtons(taskId, currentStatus) {
     { value: "in_progress", label: "В работе" },
     { value: "done", label: "Готово" },
   ];
-  const actionState = getTaskAction(taskId);
-  const isBusy = Boolean(actionState);
 
   return variants.map((item) => {
     const isCurrent = item.value === currentStatus;
-    const isPendingTarget = actionState?.type === "status" && actionState.status === item.value;
-    const label = isPendingTarget ? "Сохраняем..." : item.label;
 
     return `
       <button
         type="button"
-        class="action-btn ${isCurrent ? "is-current" : ""} ${isPendingTarget ? "is-busy" : ""}"
+        class="action-btn ${isCurrent ? "is-current" : ""}"
         data-action="status"
         data-id="${taskId}"
         data-status="${item.value}"
         ${isCurrent ? 'aria-current="true"' : ""}
-        ${isBusy ? "disabled" : ""}
       >
-        ${label}
+        ${item.label}
       </button>
     `;
   }).join("");
@@ -2300,10 +2300,17 @@ async function confirmDeleteTask() {
 
 async function updateTaskStatus(taskId, status) {
   clearMessage();
-  setTaskAction(taskId, { type: "status", status });
+
+  const safeTaskId = Number(taskId);
+  const currentAction = getTaskAction(safeTaskId);
+  if (currentAction?.type === "status") {
+    return;
+  }
+
+  taskActionState.set(safeTaskId, { type: "status", status });
 
   try {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/status`, {
+    const response = await fetch(`${API_BASE}/tasks/${safeTaskId}/status`, {
       method: "PATCH",
       headers: getAuthHeaders(true),
       body: JSON.stringify({ status }),
@@ -2316,12 +2323,13 @@ async function updateTaskStatus(taskId, status) {
       return;
     }
 
+    taskActionState.delete(safeTaskId);
     showMessage("Статус обновлён.", "success");
     mergeTaskIntoState(data);
   } catch (_error) {
     showMessage("Не удалось изменить статус.", "error");
   } finally {
-    setTaskAction(taskId, null);
+    taskActionState.delete(safeTaskId);
   }
 }
 

@@ -490,29 +490,9 @@ def test_edit_task_without_changes_shows_no_changes_message(page: Page):
     
 def test_edit_task_with_expired_token_shows_error(page: Page):
     data = setup_user_task_and_open_edit_modal(page)
-    expired_token = create_expired_token()
-
-    page.locator("#editTaskTitle").fill("Updated with expired token")
-
-    page.evaluate(
-        """token => {
-            state.token = token;
-            window.localStorage.setItem("token", token);
-        }""",
-        expired_token,
-    )
-
-    page.locator("#editTaskSubmitBtn").click()
-
-    expect(page.locator("#editModal")).to_be_visible()
-    expect(page.locator("#messageBox")).to_have_text("Не удалось сохранить изменения.")
-
-
-def test_task_card_does_not_change_after_unsuccessful_edit(page: Page):
-    data = setup_user_task_and_open_edit_modal(page)
-    expired_token = create_expired_token()
     original_title = data["title"]
-    new_title = "Should not be saved"
+    new_title = f"Updated {uuid.uuid4().hex[:6]}"
+    expired_token = create_expired_token()
 
     page.locator("#editTaskTitle").fill(new_title)
 
@@ -526,7 +506,43 @@ def test_task_card_does_not_change_after_unsuccessful_edit(page: Page):
 
     page.locator("#editTaskSubmitBtn").click()
 
-    expect(page.locator("#messageBox")).to_have_text("Не удалось сохранить изменения.")
-    expect(page.locator("#editModal")).to_be_visible()
+    expect(page.locator("#messageBox")).to_be_visible()
+    expect(page.locator("#messageBox")).to_have_text("Сессия истекла. Войдите снова.")
+
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    expect(page.locator("#authStatusText")).to_have_text("Не авторизован")
+    expect(page.locator("#userText")).to_have_text("—")
+
+    expect(page.locator("#editModal")).to_be_hidden()
+
+
+def test_task_card_does_not_change_after_unsuccessful_edit(page: Page):
+    data = setup_user_task_and_open_edit_modal(page)
+    original_title = data["title"]
+    new_title = f"Should not be saved {uuid.uuid4().hex[:6]}"
+    expired_token = create_expired_token()
+
+    page.locator("#editTaskTitle").fill(new_title)
+
+    page.evaluate(
+        """token => {
+            state.token = token;
+            window.localStorage.setItem("token", token);
+        }""",
+        expired_token,
+    )
+
+    page.locator("#editTaskSubmitBtn").click()
+
+    expect(page.locator("#messageBox")).to_be_visible()
+    expect(page.locator("#messageBox")).to_have_text("Сессия истекла. Войдите снова.")
+
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    expect(page.locator("#editModal")).to_be_hidden()
+
+    login_via_ui(page, data["username"], data["password"])
+
     expect(page.locator("#tasksList")).to_contain_text(original_title)
     expect(page.locator("#tasksList")).not_to_contain_text(new_title)

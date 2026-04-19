@@ -132,7 +132,6 @@ def test_change_task_status_to_the_same(page: Page):
     
 def test_change_task_status_with_expired_token(page: Page):
     data = setup_user_and_task_for_status(page)
-    task_card = data["task_card"]
     expired_token = create_expired_token()
 
     page.evaluate(
@@ -143,8 +142,21 @@ def test_change_task_status_with_expired_token(page: Page):
         expired_token,
     )
 
-    task_card.locator('[data-action="status"][data-status="done"]').click()
+    data["task_card"].locator('[data-action="status"][data-status="done"]').click()
 
-    expect(page.locator("#messageBox")).to_have_text("Не удалось изменить статус.")
+    expect(page.locator("#messageBox")).to_be_visible()
+    expect(page.locator("#messageBox")).to_have_text("Сессия истекла. Войдите снова.")
+
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    expect(page.locator("#authStatusText")).to_have_text("Не авторизован")
+    expect(page.locator("#userText")).to_have_text("—")
+
+    login_via_ui(page, data["username"], data["password"])
+
+    task_card = page.locator("#tasksList .task-card", has_text=data["title"]).first
+    expect(task_card).to_be_visible()
     expect(task_card.locator(".badge-status")).to_have_text("Новая")
-    expect(task_card.locator('[data-action="status"][data-status="new"]')).to_have_class(re.compile(r".*is-current.*"))
+    expect(
+        task_card.locator('[data-action="status"][data-status="new"]')
+    ).to_have_class(re.compile(r".*is-current.*"))

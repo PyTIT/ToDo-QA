@@ -340,30 +340,35 @@ def test_create_task_without_deadline_creates_task_without_deadline(page: Page):
     expect(task_card.locator(".badge-deadline")).to_contain_text("Без дедлайна")
     
 def test_create_task_with_expired_token(page: Page):
+    username, password = generate_unique_user()
+    register_user_via_api(username, password)
+    login_via_ui(page, username, password)
+
+    title = f"Expired create {uuid.uuid4().hex[:6]}"
     expired_token = create_expired_token()
-    title = "expired_token_task"
-
-    page.goto(BASE_URL)
-
-    page.evaluate(
-        """({ token, username }) => {
-            window.localStorage.setItem("token", token);
-            window.localStorage.setItem("username", username);
-        }""",
-        {"token": expired_token, "username": "expired_user"},
-    )
-
-    page.reload()
-
-    expect(page.locator("#authSection")).to_be_hidden()
-    expect(page.locator("#appSection")).to_be_visible()
 
     page.locator("#taskTitle").fill(title)
-    page.locator("#taskDescription").fill("Task with expired token")
+    page.locator("#taskDescription").fill("Task should not be created")
+
+    page.evaluate(
+        """token => {
+            state.token = token;
+            window.localStorage.setItem("token", token);
+        }""",
+        expired_token,
+    )
+
     page.locator("#taskSubmitBtn").click()
 
     expect(page.locator("#messageBox")).to_be_visible()
-    expect(page.locator("#messageBox")).to_have_text("Не удалось создать задачу.")
+    expect(page.locator("#messageBox")).to_have_text("Сессия истекла. Войдите снова.")
+
+    expect(page.locator("#authSection")).to_be_visible()
+    expect(page.locator("#appSection")).to_be_hidden()
+    expect(page.locator("#authStatusText")).to_have_text("Не авторизован")
+    expect(page.locator("#userText")).to_have_text("—")
+
+    login_via_ui(page, username, password)
     expect(page.locator("#tasksList")).not_to_contain_text(title)
     
 def test_clear_deadline_field_with_clear_button(page: Page):

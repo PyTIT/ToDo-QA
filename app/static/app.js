@@ -824,6 +824,23 @@ async function safeReadJson(response) {
   }
 }
 
+function isSessionExpiredResponse(response, data = {}) {
+  const message = String(data?.msg || data?.message || data?.error || "").toLowerCase();
+
+  return response.status === 401 || (
+    response.status === 422 && (
+      message.includes("expired")
+      || message.includes("token")
+      || message.includes("jwt")
+      || message.includes("signature")
+    )
+  );
+}
+
+function handleSessionExpired() {
+  logout("Сессия истекла. Войдите снова.", "warning");
+}
+
 function getAuthHeaders(withJson = false) {
   const headers = {};
   if (withJson) {
@@ -1922,6 +1939,11 @@ async function loadTasks(options = {}) {
     const filteredData = await safeReadJson(filteredResponse);
 
     if (!filteredResponse.ok) {
+      if (isSessionExpiredResponse(filteredResponse, filteredData)) {
+        handleSessionExpired();
+        return;
+      }
+
       showMessage(filteredData.error || filteredData.message || "Не удалось загрузить задачи.", "error");
       return;
     }
@@ -1933,6 +1955,10 @@ async function loadTasks(options = {}) {
       allTasksData = await safeReadJson(allTasksResponse);
 
       if (!allTasksResponse.ok) {
+        if (isSessionExpiredResponse(allTasksResponse, allTasksData)) {
+          handleSessionExpired();
+          return;
+        }
         showMessage(allTasksData.error || allTasksData.message || "Не удалось загрузить общую статистику.", "error");
         return;
       }
@@ -2205,6 +2231,11 @@ async function createTask(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
+      if (isSessionExpiredResponse(response, data)) {
+        handleSessionExpired();
+        return;
+      }
+
       if (!mapServerMessageToField(data.error || data.message, "create")) {
         showMessage(data.error || data.message || "Не удалось создать задачу.", "error");
       }
@@ -2319,6 +2350,11 @@ async function updateTaskStatus(taskId, status) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
+      if (isSessionExpiredResponse(response, data)) {
+        handleSessionExpired();
+        return;
+      }
+
       showMessage(data.error || data.message || "Не удалось изменить статус.", "error");
       return;
     }
@@ -2346,6 +2382,12 @@ async function deleteTask(taskId) {
 
     if (!response.ok) {
       const data = await safeReadJson(response);
+
+      if (isSessionExpiredResponse(response, data)) {
+        handleSessionExpired();
+        return;
+      }
+
       showMessage(data.error || data.message || "Не удалось удалить задачу.", "error");
       return;
     }
@@ -2377,6 +2419,11 @@ async function openEditModal(taskId) {
       data = await safeReadJson(response);
 
       if (!response.ok) {
+        if (isSessionExpiredResponse(response, data)) {
+          handleSessionExpired();
+          return;
+        }
+
         showMessage(data.error || data.message || "Не удалось получить задачу.", "error");
         return;
       }
@@ -2527,6 +2574,11 @@ async function submitTaskEdit(event) {
     const data = await safeReadJson(response);
 
     if (!response.ok) {
+      if (isSessionExpiredResponse(response, data)) {
+        handleSessionExpired();
+        return;
+      }
+
       if (!mapServerMessageToField(data.error || data.message, "edit")) {
         showMessage(data.error || data.message || "Не удалось сохранить изменения.", "error");
       }
@@ -2562,7 +2614,7 @@ function resetFilters() {
   loadTasks();
 }
 
-function logout() {
+function logout(message = "Сеанс завершён.", kind = "success") {
   state.token = "";
   state.username = "";
   state.tasks = [];
@@ -2582,7 +2634,7 @@ function logout() {
   closeDeleteModal();
   clearTaskFormInlineState("create");
   clearTaskFormInlineState("edit");
-  showMessage("Сеанс завершён.", "success");
+  showMessage(message, kind);
   updateView();
 }
 

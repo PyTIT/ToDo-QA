@@ -225,6 +225,7 @@ def test_sort_orders(page, set_select_value, search_sort_page, search_sort_fixtu
     page, _ = search_sort_page
     apply_filters(page, set_select_value, search=search, sort=sort)
 
+    expect(page.locator("#tasksList .task-title")).to_have_count(len(expected_keys))
     assert get_task_titles(page) == [search_sort_fixtures[key]["title"] for key in expected_keys]
 
 

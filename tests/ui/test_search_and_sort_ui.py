@@ -1,374 +1,238 @@
 import time
-import uuid
 from datetime import datetime, timedelta
 
-import requests
-from playwright.sync_api import Page, expect
+import pytest
+from playwright.sync_api import expect
 
-BASE_URL = "http://127.0.0.1:5000"
-
-
-def generate_unique_user():
-    suffix = uuid.uuid4().hex[:6]
-    return f"uiuser_{suffix}", "Password123"
+from conftest import create_task_via_api, update_task_status_via_api
 
 
-def register_user_via_api(username: str, password: str):
-    response = requests.post(
-        f"{BASE_URL}/register",
-        json={"username": username, "password": password},
-    )
-    assert response.status_code == 201
-
-
-def login_user_via_api(username: str, password: str) -> str:
-    response = requests.post(
-        f"{BASE_URL}/login",
-        json={"username": username, "password": password},
-    )
-    assert response.status_code == 200
-    return response.json()["access_token"]
-
-
-def create_task_via_api(
-    token: str,
-    title: str,
-    description: str = "",
-    priority: str = "medium",
-    deadline: str | None = None,
-):
-    response = requests.post(
-        f"{BASE_URL}/tasks",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "title": title,
-            "description": description,
-            "priority": priority,
-            "deadline": deadline,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
-
-
-def update_task_status_via_api(token: str, task_id: int, status: str):
-    response = requests.patch(
-        f"{BASE_URL}/tasks/{task_id}/status",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        json={"status": status},
-    )
-    assert response.status_code == 200
-    return response.json()
-
-
-def open_login_form(page: Page):
-    page.goto(BASE_URL)
-    expect(page.locator("#loginForm")).to_be_visible()
-    expect(page.locator("#registerForm")).to_be_hidden()
-
-
-def login_via_ui(page: Page, username: str, password: str):
-    open_login_form(page)
-
-    page.locator("#loginUsername").fill(username)
-    page.locator("#loginPassword").fill(password)
-    page.locator("#loginSubmitBtn").click()
-
-    expect(page.locator("#authSection")).to_be_hidden()
-    expect(page.locator("#appSection")).to_be_visible()
-    expect(page.locator("#authStatusText")).to_have_text("Авторизован")
-    expect(page.locator("#userText")).to_have_text(username)
-
-
-def setup_logged_in_user(page: Page):
-    username, password = generate_unique_user()
-    register_user_via_api(username, password)
-    token = login_user_via_api(username, password)
-    login_via_ui(page, username, password)
-    return username, password, token
-
-
-def set_select_value(page: Page, selector: str, value: str):
-    page.locator(selector).evaluate(
-        """(el, nextValue) => {
-            el.value = nextValue;
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-        }""",
-        value,
-    )
-
-
-def apply_filters(
-    page: Page,
-    *,
-    search: str | None = None,
-    status: str | None = None,
-    sort: str | None = None,
-):
+def apply_filters(page, set_select_value, *, search=None, status=None, sort=None):
     if search is not None:
         page.locator("#searchInput").fill(search)
     if status is not None:
         set_select_value(page, "#statusFilterSelect", status)
     if sort is not None:
         set_select_value(page, "#sortSelect", sort)
-
     page.locator("#applyFiltersBtn").click()
 
 
-def get_task_titles(page: Page) -> list[str]:
+def get_task_titles(page):
     return [text.strip() for text in page.locator("#tasksList .task-title").all_inner_texts()]
 
 
-def create_search_sort_fixtures(token: str):
+@pytest.fixture
+def search_sort_page(page, api_user, base_url, login_via_ui):
+    login_via_ui(page, api_user.username, api_user.password)
+    page.goto(base_url)
+    expect(page.locator("#appSection")).to_be_visible()
+    return page, api_user.token
+
+
+@pytest.fixture
+def search_sort_fixtures(search_sort_page, base_url):
+    page, token = search_sort_page
     now = datetime.now().replace(second=0, microsecond=0)
 
-    task_search_title = create_task_via_api(
-        token=token,
-        title="Smoke login task",
-        description="API regression coverage",
-        priority="medium",
-        deadline=(now + timedelta(days=2)).isoformat(),
-    )
+    def create(title, description="", priority="medium", deadline=None, status=None):
+        task = create_task_via_api(
+            token,
+            title=title,
+            description=description,
+            priority=priority,
+            deadline=deadline,
+            base_url=base_url,
+        ).json()
+        if status:
+            update_task_status_via_api(token, task["id"], status, base_url=base_url)
+        return task
 
-    task_search_description = create_task_via_api(
-        token=token,
-        title="Backend regression",
-        description="Playwright smoke scenario in description",
-        priority="low",
-        deadline=(now + timedelta(days=3)).isoformat(),
-    )
+    fixtures = {
+        "search_title": create(
+            "Smoke login task",
+            "API regression coverage",
+            deadline=(now + timedelta(days=2)).isoformat(),
+        ),
+        "search_description": create(
+            "Backend regression",
+            "Playwright smoke scenario in description",
+            priority="low",
+            deadline=(now + timedelta(days=3)).isoformat(),
+        ),
+        "in_progress": create(
+            "Status target task",
+            "Task that should become in progress",
+            deadline=(now + timedelta(days=4)).isoformat(),
+            status="in_progress",
+        ),
+        "done_search": create(
+            "Smoke done task",
+            "Done status with smoke keyword",
+            priority="high",
+            deadline=(now + timedelta(days=1)).isoformat(),
+            status="done",
+        ),
+        "priority_low": create(
+            "Priority low task",
+            "Priority sort fixture low",
+            priority="low",
+            deadline=(now + timedelta(days=6)).isoformat(),
+        ),
+        "priority_high": create(
+            "Priority high task",
+            "Priority sort fixture high",
+            priority="high",
+            deadline=(now + timedelta(days=5)).isoformat(),
+        ),
+        "priority_medium": create(
+            "Priority medium task",
+            "Priority sort fixture medium",
+            priority="medium",
+            deadline=(now + timedelta(days=7)).isoformat(),
+        ),
+        "deadline_late": create(
+            "Deadline late task",
+            "Later deadline fixture",
+            deadline=(now + timedelta(days=10)).isoformat(),
+        ),
+        "deadline_soon": create(
+            "Deadline soon task",
+            "Soon deadline fixture",
+            deadline=(now + timedelta(days=1, hours=2)).isoformat(),
+        ),
+    }
 
-    task_in_progress = create_task_via_api(
-        token=token,
-        title="Status target task",
-        description="Task that should become in progress",
-        priority="medium",
-        deadline=(now + timedelta(days=4)).isoformat(),
-    )
-    update_task_status_via_api(token, task_in_progress["id"], "in_progress")
-
-    task_done_search = create_task_via_api(
-        token=token,
-        title="Smoke done task",
-        description="Done status with smoke keyword",
-        priority="high",
-        deadline=(now + timedelta(days=1)).isoformat(),
-    )
-    update_task_status_via_api(token, task_done_search["id"], "done")
-
-    task_priority_low = create_task_via_api(
-        token=token,
-        title="Priority low task",
-        description="Priority sort fixture low",
-        priority="low",
-        deadline=(now + timedelta(days=6)).isoformat(),
-    )
-
-    task_priority_high = create_task_via_api(
-        token=token,
-        title="Priority high task",
-        description="Priority sort fixture high",
-        priority="high",
-        deadline=(now + timedelta(days=5)).isoformat(),
-    )
-
-    task_priority_medium = create_task_via_api(
-        token=token,
-        title="Priority medium task",
-        description="Priority sort fixture medium",
-        priority="medium",
-        deadline=(now + timedelta(days=7)).isoformat(),
-    )
-
-    task_deadline_late = create_task_via_api(
-        token=token,
-        title="Deadline late task",
-        description="Later deadline fixture",
-        priority="medium",
-        deadline=(now + timedelta(days=10)).isoformat(),
-    )
-
-    task_deadline_soon = create_task_via_api(
-        token=token,
-        title="Deadline soon task",
-        description="Soon deadline fixture",
-        priority="medium",
-        deadline=(now + timedelta(days=1, hours=2)).isoformat(),
-    )
-
-    task_created_old = create_task_via_api(
-        token=token,
-        title="Created old task",
-        description="Created sort old",
-        priority="medium",
+    fixtures["created_old"] = create(
+        "Created old task",
+        "Created sort old",
         deadline=(now + timedelta(days=8)).isoformat(),
     )
     time.sleep(1.1)
-
-    task_created_middle = create_task_via_api(
-        token=token,
-        title="Created middle task",
-        description="Created sort middle",
-        priority="medium",
+    fixtures["created_middle"] = create(
+        "Created middle task",
+        "Created sort middle",
         deadline=(now + timedelta(days=8, hours=1)).isoformat(),
     )
     time.sleep(1.1)
-
-    task_created_new = create_task_via_api(
-        token=token,
-        title="Created new task",
-        description="Created sort new",
-        priority="medium",
+    fixtures["created_new"] = create(
+        "Created new task",
+        "Created sort new",
         deadline=(now + timedelta(days=8, hours=2)).isoformat(),
     )
 
-    return {
-        "search_title": task_search_title,
-        "search_description": task_search_description,
-        "in_progress": task_in_progress,
-        "done_search": task_done_search,
-        "priority_low": task_priority_low,
-        "priority_high": task_priority_high,
-        "priority_medium": task_priority_medium,
-        "deadline_late": task_deadline_late,
-        "deadline_soon": task_deadline_soon,
-        "created_old": task_created_old,
-        "created_middle": task_created_middle,
-        "created_new": task_created_new,
-    }
+    return fixtures
 
 
-def test_search_by_full_word_in_title(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
+@pytest.mark.parametrize(
+    ("search", "expected_count", "must_have", "must_not_have", "summary"),
+    [
+        ("login", 1, ["search_title"], ["search_description", "done_search"], "1 задача в выборке «Все задачи» по запросу «login»."),
+        ("ogin", 1, ["search_title"], ["search_description", "done_search"], "1 задача в выборке «Все задачи» по запросу «ogin»."),
+        ("SMOKE", 3, ["search_title", "search_description", "done_search"], [], None),
+        ("no_such_task_value", 0, [], [], "По запросу «no_such_task_value» ничего не найдено."),
+    ],
+)
+def test_search_variants(page, set_select_value, search_sort_page, search_sort_fixtures, search, expected_count, must_have, must_not_have, summary):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search=search)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
+    expect(page.locator("#tasksList .task-card")).to_have_count(expected_count)
 
-    apply_filters(page, search="login")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Все задачи» по запросу «login».")
-    expect(page.locator("#activeFilterText")).to_contain_text("поиск: login")
+    for key in must_have:
+        expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures[key]["title"])
+    for key in must_not_have:
+        expect(page.locator("#tasksList")).not_to_contain_text(search_sort_fixtures[key]["title"])
+    if summary:
+        expect(page.locator("#tasksSummary")).to_have_text(summary)
 
 
-def test_search_by_full_word_in_description_with_enter(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
+def test_search_by_full_word_in_description_with_enter(search_sort_page, search_sort_fixtures):
+    page, _ = search_sort_page
 
     page.locator("#searchInput").fill("Playwright")
     page.locator("#searchInput").press("Enter")
 
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_title"]["title"])
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["search_description"]["title"])
+    expect(page.locator("#tasksList")).not_to_contain_text(search_sort_fixtures["search_title"]["title"])
     expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Все задачи» по запросу «Playwright».")
 
 
-def test_search_with_no_results_shows_empty_summary(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    create_search_sort_fixtures(token)
+@pytest.mark.parametrize(
+    ("status", "must_have", "must_not_have", "summary"),
+    [
+        ("all", ["search_title", "in_progress", "done_search"], [], None),
+        ("new", ["search_title"], ["in_progress", "done_search"], "в выборке «Новые»."),
+        ("in_progress", ["in_progress"], ["done_search"], "1 задача в выборке «В работе»."),
+        ("done", ["done_search"], ["search_title", "in_progress"], "1 задача в выборке «Готово»."),
+    ],
+)
+def test_status_filters(page, set_select_value, search_sort_page, search_sort_fixtures, status, must_have, must_not_have, summary):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, status=status)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="no_such_task_value")
-
-    expect(page.locator("#tasksList .task-card")).to_have_count(0)
-    expect(page.locator("#tasksSummary")).to_have_text("По запросу «no_such_task_value» ничего не найдено.")
-    expect(page.locator("#tasksList")).to_contain_text("Пока нет задач")
-
-
-def test_filter_in_progress_shows_only_in_progress_tasks(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="in_progress")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["in_progress"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «В работе».")
-    expect(page.locator("#activeFilterText")).to_contain_text("В работе")
+    for key in must_have:
+        expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures[key]["title"])
+    for key in must_not_have:
+        expect(page.locator("#tasksList")).not_to_contain_text(search_sort_fixtures[key]["title"])
+    if summary:
+        expect(page.locator("#tasksSummary")).to_contain_text(summary)
 
 
-def test_search_and_status_filter_work_together(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
+def test_search_and_status_filter_work_together(page, set_select_value, search_sort_page, search_sort_fixtures):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search="Smoke", status="done")
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Smoke", status="done")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_title"]["title"])
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["done_search"]["title"])
+    expect(page.locator("#tasksList")).not_to_contain_text(search_sort_fixtures["search_title"]["title"])
     expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Готово» по запросу «Smoke».")
     expect(page.locator("#activeFilterText")).to_contain_text("Готово")
     expect(page.locator("#activeFilterText")).to_contain_text("поиск: Smoke")
 
 
-def test_sort_by_priority_desc_orders_high_medium_low(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
+def test_search_value_is_trimmed(page, set_select_value, search_sort_page, search_sort_fixtures):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search="   login   ")
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Priority", sort="priority_desc")
-
-    expect(page.locator("#tasksList .task-title")).to_have_count(3)
-    titles = get_task_titles(page)
-
-    assert titles == [
-        fixtures["priority_high"]["title"],
-        fixtures["priority_medium"]["title"],
-        fixtures["priority_low"]["title"],
-    ]
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["search_title"]["title"])
+    expect(page.locator("#tasksList")).not_to_contain_text(search_sort_fixtures["search_description"]["title"])
+    expect(page.locator("#activeFilterText")).to_contain_text("поиск: login")
 
 
-def test_sort_by_created_desc_orders_newest_first(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
+@pytest.mark.parametrize(
+    ("search", "status", "summary"),
+    [
+        ("login", "done", "По запросу «login» ничего не найдено."),
+        ("no_match_value", "in_progress", "По запросу «no_match_value» ничего не найдено."),
+    ],
+)
+def test_search_and_status_mismatch_returns_empty(page, set_select_value, search_sort_page, search_sort_fixtures, search, status, summary):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search=search, status=status)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Created sort", sort="created_desc")
-
-    expect(page.locator("#tasksList .task-title")).to_have_count(3)
-    titles = get_task_titles(page)
-
-    assert titles == [
-        fixtures["created_new"]["title"],
-        fixtures["created_middle"]["title"],
-        fixtures["created_old"]["title"],
-    ]
+    expect(page.locator("#tasksList .task-card")).to_have_count(0)
+    expect(page.locator("#tasksSummary")).to_have_text(summary)
 
 
-def test_reset_filters_restores_default_controls_and_hides_active_filter_chips(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    create_search_sort_fixtures(token)
+@pytest.mark.parametrize(
+    ("search", "sort", "expected_keys"),
+    [
+        ("Priority", "priority_desc", ["priority_high", "priority_medium", "priority_low"]),
+        ("Created sort", "created_desc", ["created_new", "created_middle", "created_old"]),
+        ("Deadline", "deadline_asc", ["deadline_soon", "deadline_late"]),
+    ],
+)
+def test_sort_orders(page, set_select_value, search_sort_page, search_sort_fixtures, search, sort, expected_keys):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search=search, sort=sort)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
+    assert get_task_titles(page) == [search_sort_fixtures[key]["title"] for key in expected_keys]
 
-    apply_filters(page, search="Smoke", status="done", sort="created_desc")
+
+def test_reset_filters_restores_defaults(page, set_select_value, search_sort_page, search_sort_fixtures):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search="Smoke", status="done", sort="created_desc")
 
     expect(page.locator("#activeFilterChips")).to_be_visible()
-
     page.locator("#resetFiltersBtn").click()
 
     expect(page.locator("#searchInput")).to_have_value("")
@@ -378,291 +242,57 @@ def test_reset_filters_restores_default_controls_and_hides_active_filter_chips(p
     expect(page.locator("#activeFilterText")).to_have_text("Все задачи • сортировка: Ближайший дедлайн")
 
 
-def test_removing_only_search_filter_chip_keeps_status_filter(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
+@pytest.mark.parametrize(
+    ("chip_key", "search", "status", "sort"),
+    [
+        ("search", "Smoke", "done", None),
+        ("status", "Smoke", "done", "created_desc"),
+        ("sort", "Priority sort fixture", "new", "priority_desc"),
+    ],
+)
+def test_filter_chips_clear_only_target_filter(page, set_select_value, search_sort_page, search_sort_fixtures, chip_key, search, status, sort):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search=search, status=status, sort=sort)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
+    page.locator(f'[data-clear-filter="{chip_key}"]').click()
 
-    apply_filters(page, search="Smoke", status="done")
+    if chip_key == "search":
+        expect(page.locator("#searchInput")).to_have_value("")
+        expect(page.locator("#statusFilterSelect")).to_have_value("done")
+    elif chip_key == "status":
+        expect(page.locator("#searchInput")).to_have_value("Smoke")
+        expect(page.locator("#statusFilterSelect")).to_have_value("all")
+        expect(page.locator("#sortSelect")).to_have_value("created_desc")
+    else:
+        expect(page.locator("#searchInput")).to_have_value("Priority sort fixture")
+        expect(page.locator("#statusFilterSelect")).to_have_value("new")
+        expect(page.locator("#sortSelect")).to_have_value("deadline_asc")
 
-    expect(page.locator("#activeFilterChips")).to_be_visible()
-    page.locator('[data-clear-filter="search"]').click()
 
-    expect(page.locator("#searchInput")).to_have_value("")
-    expect(page.locator("#statusFilterSelect")).to_have_value("done")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Готово».")
-    
-def test_search_by_partial_word(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="ogin")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Все задачи» по запросу «ogin».")
-    
-def test_search_is_case_insensitive(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="SMOKE")
-
-    expect(page.locator("#tasksList .task-card")).to_have_count(3)
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    
-def test_empty_search_shows_tasks_without_search_limitation(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="login")
-    apply_filters(page, search="")
+def test_empty_search_after_non_empty_search_restores_full_selection(page, set_select_value, search_sort_page, search_sort_fixtures):
+    page, _ = search_sort_page
+    apply_filters(page, set_select_value, search="login")
+    apply_filters(page, set_select_value, search="")
 
     expect(page.locator("#searchInput")).to_have_value("")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["in_progress"]["title"])
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["search_title"]["title"])
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["search_description"]["title"])
+    expect(page.locator("#tasksList")).to_contain_text(search_sort_fixtures["in_progress"]["title"])
     expect(page.locator("#activeFilterText")).not_to_contain_text("поиск:")
-    
-def test_search_with_spaces_around_value_is_trimmed(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
 
-    apply_filters(page, search="   login   ")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#activeFilterText")).to_contain_text("поиск: login")
-    
-def test_filter_all_tasks_shows_tasks_of_all_statuses(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="all")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["in_progress"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#statusFilterSelect")).to_have_value("all")
-    
-def test_filter_new_shows_only_new_tasks(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="new")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["in_progress"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksSummary")).to_contain_text("в выборке «Новые».")
-    
-def test_filter_done_shows_only_done_tasks(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="done")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["in_progress"]["title"])
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Готово».")
-    
-def test_switching_between_status_filters_updates_list_correctly(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="done")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["in_progress"]["title"])
-
-    apply_filters(page, status="new")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-
-    apply_filters(page, status="in_progress")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["in_progress"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).not_to_contain_text(fixtures["done_search"]["title"])
-    
-def test_search_matches_but_status_does_not_match_returns_no_results(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="login", status="done")
-
-    expect(page.locator("#tasksList .task-card")).to_have_count(0)
-    expect(page.locator("#tasksSummary")).to_have_text("По запросу «login» ничего не найдено.")
-    
-def test_status_matches_but_search_does_not_match_returns_no_results(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="no_match_value", status="in_progress")
-
-    expect(page.locator("#tasksList .task-card")).to_have_count(0)
-    expect(page.locator("#tasksSummary")).to_have_text("По запросу «no_match_value» ничего не найдено.")
-    
-def test_sort_by_deadline_asc_orders_nearest_deadline_first(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Deadline", sort="deadline_asc")
-
-    expect(page.locator("#tasksList .task-title")).to_have_count(2)
-    titles = get_task_titles(page)
-
-    assert titles == [
-        fixtures["deadline_soon"]["title"],
-        fixtures["deadline_late"]["title"],
-    ]
-    
-def test_changing_sort_with_existing_search_and_status_keeps_filters(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Priority sort fixture", status="new", sort="priority_desc")
-
-    titles = get_task_titles(page)
-    assert titles == [
-        fixtures["priority_high"]["title"],
-        fixtures["priority_medium"]["title"],
-        fixtures["priority_low"]["title"],
-    ]
-
-    apply_filters(page, sort="created_desc")
-
-    expect(page.locator("#searchInput")).to_have_value("Priority sort fixture")
-    expect(page.locator("#statusFilterSelect")).to_have_value("new")
-    expect(page.locator("#sortSelect")).to_have_value("created_desc")
-    expect(page.locator("#activeFilterText")).to_contain_text("Новые")
-    expect(page.locator("#activeFilterText")).to_contain_text("поиск: Priority sort fixture")
-    expect(page.locator("#activeFilterText")).to_contain_text("Сначала новые")
-
-    titles = get_task_titles(page)
-    assert titles == [
-        fixtures["priority_medium"]["title"],
-        fixtures["priority_high"]["title"],
-        fixtures["priority_low"]["title"],
-    ]
-    
-def test_removing_only_status_filter_chip_keeps_search_and_sort(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Smoke", status="done", sort="created_desc")
-
-    expect(page.locator("#activeFilterChips")).to_be_visible()
-    page.locator('[data-clear-filter="status"]').click()
-
-    expect(page.locator("#searchInput")).to_have_value("Smoke")
-    expect(page.locator("#statusFilterSelect")).to_have_value("all")
-    expect(page.locator("#sortSelect")).to_have_value("created_desc")
-
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_description"]["title"])
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["done_search"]["title"])
-    
-def test_removing_only_sort_filter_chip_keeps_other_filters(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="Priority sort fixture", status="new", sort="priority_desc")
-
-    titles = get_task_titles(page)
-    assert titles == [
-        fixtures["priority_high"]["title"],
-        fixtures["priority_medium"]["title"],
-        fixtures["priority_low"]["title"],
-    ]
-
-    page.locator('[data-clear-filter="sort"]').click()
-
-    expect(page.locator("#searchInput")).to_have_value("Priority sort fixture")
-    expect(page.locator("#statusFilterSelect")).to_have_value("new")
-    expect(page.locator("#sortSelect")).to_have_value("deadline_asc")
-
-    titles = get_task_titles(page)
-    assert titles == [
-        fixtures["priority_high"]["title"],
-        fixtures["priority_low"]["title"],
-        fixtures["priority_medium"]["title"],
-    ]
-
-def test_summary_for_non_empty_selection(page: Page):
-    username, password, token = setup_logged_in_user(page)
-    fixtures = create_search_sort_fixtures(token)
-
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, search="login")
-
-    expect(page.locator("#tasksSummary")).to_have_text("1 задача в выборке «Все задачи» по запросу «login».")
-    expect(page.locator("#tasksList")).to_contain_text(fixtures["search_title"]["title"])
-    
-def test_summary_for_empty_selection_without_search(page: Page):
-    username, password, token = setup_logged_in_user(page)
-
-    only_new_task = create_task_via_api(
-        token=token,
+def test_summary_for_empty_selection_without_search(page, set_select_value, search_sort_page, base_url):
+    page, token = search_sort_page
+    create_task_via_api(
+        token,
         title="Only new task",
         description="No done tasks here",
         priority="medium",
+        deadline=None,
+        base_url=base_url,
     )
 
-    page.goto(BASE_URL)
-    expect(page.locator("#appSection")).to_be_visible()
-
-    apply_filters(page, status="done")
+    apply_filters(page, set_select_value, status="done")
 
     expect(page.locator("#tasksList .task-card")).to_have_count(0)
     expect(page.locator("#tasksSummary")).to_have_text("Сейчас нет задач в выборке «Готово».")

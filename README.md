@@ -16,7 +16,7 @@
 - покрыть пользовательские сценарии UI-автотестами на Playwright;
 - поддерживать документацию, код и тесты в синхронном состоянии.
 
-Текущий scope проекта — **v2**, а не старый MVP:
+Функциональность проекта:
 - регистрация и логин;
 - JWT access token;
 - список задач пользователя;
@@ -28,7 +28,7 @@
 - поиск по задачам;
 - фильтр по статусу;
 - дедлайн;
-- UI v2 с отдельным auth-screen и workspace-screen.
+- интерфейс с отдельным экраном авторизации и отдельной рабочей зоной.
 
 ---
 
@@ -71,44 +71,47 @@
 ### Основные файлы
 
 ```text
-project/
+TO-DO_APP/
 ├── app/
+│   ├── static/
+│   │   ├── app.js
+│   │   └── styles.css
+│   ├── templates/
+│   │   └── index.html
 │   ├── __init__.py
 │   ├── auth.py
 │   ├── config.py
 │   ├── extensions.py
 │   ├── models.py
-│   ├── tasks.py
-│   ├── templates/
-│   │   └── index.html
-│   └── static/
-│       ├── app.js
-│       └── styles.css
+│   └── tasks.py
 │
 ├── tests/
-│   ├── test_register.py
-│   ├── test_login.py
-│   ├── test_tasks_get.py
-│   ├── test_task_get_by_id.py
-│   ├── test_tasks_create.py
-│   ├── test_task_update.py
-│   ├── test_tasks_status.py
-│   └── test_tasks_delete.py
+│   ├── api/
+│   │   ├── test_register.py
+│   │   ├── test_login.py
+│   │   ├── test_tasks_get.py
+│   │   ├── test_task_get_by_id.py
+│   │   ├── test_tasks_create.py
+│   │   ├── test_task_update.py
+│   │   ├── test_tasks_status.py
+│   │   └── test_tasks_delete.py
+│   ├── ui/
+│   │   ├── test_register_ui.py
+│   │   ├── test_login_ui.py
+│   │   ├── test_create_task_ui.py
+│   │   ├── test_edit_task_ui.py
+│   │   ├── test_edit_task_status_ui.py
+│   │   ├── test_delete_task_ui.py
+│   │   └── test_search_and_sort_ui.py
+│   └── README.txt
 │
-├── test_ui/
-│   ├── test_register_ui.py
-│   ├── test_login_ui.py
-│   ├── test_create_task_ui.py
-│   ├── test_edit_task_ui.py
-│   ├── test_edit_task_status_ui.py
-│   ├── test_delete_task_ui.py
-│   └── test_search_and_sort_ui.py
-│
+├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
 ├── run.py
 ├── README.md
-└── .env
+├── .env
+└── .env.example
 ```
 
 ---
@@ -136,7 +139,7 @@ project/
 - поддержка `deadline`;
 - защита от доступа к чужим задачам.
 
-### UI v2
+### UI
 - отдельный экран авторизации;
 - отдельная рабочая зона;
 - статистика по задачам;
@@ -509,7 +512,7 @@ http://127.0.0.1:5000
 
 ### API-тесты
 ```bash
-pytest tests -v
+pytest tests/api -v
 ```
 
 ### UI-тесты
@@ -523,7 +526,7 @@ playwright install
 После этого можно запускать UI-тесты:
 
 ```bash
-pytest test_ui -v
+pytest tests/ui -v
 ```
 
 ### Все тесты сразу
@@ -558,7 +561,7 @@ pytest -v
 
 ---
 
-## Особенности UI v2
+## Особенности UI
 
 В интерфейсе реализованы:
 - отдельный экран авторизации;
@@ -579,7 +582,7 @@ pytest -v
 
 ---
 
-## Что не входит в текущую версию
+## Что не входит в проект
 
 В проект не входят:
 - refresh token;
@@ -590,15 +593,6 @@ pytest -v
 - пагинация;
 - серверная сортировка;
 - расширенная аналитика.
-
----
-
-## Планы на дальнейшее развитие
-
-Возможные следующие шаги:
-- расширять и поддерживать текущий набор UI-автотестов;
-- вынести повторяющиеся тестовые хелперы в общие фикстуры;
-- при необходимости добавить CI-проверки;
 
 ---
 
